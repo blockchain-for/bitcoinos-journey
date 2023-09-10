@@ -1,0 +1,2 @@
+pub const PUBLIC_KEY: &str = "be788f1c27b96b95890f44c137df26b7a78dd53214b7664043aea8102bdf30d4";
+pub const PRIVATE_KEY: &str = "8ccf70d03f560c21313e6ee68bdaaffe59b9d1a783954767dc0e090d6814ce50";

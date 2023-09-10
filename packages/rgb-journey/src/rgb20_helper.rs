@@ -1,11 +1,10 @@
-
 use std::{convert::Infallible, fs};
 
 use amplify::hex::FromHex;
 use bp::{Chain, Outpoint, Tx, Txid};
 use rgb_schemata::{nia_rgb20, nia_schema};
 use rgbstd::containers::BindleContent;
-use rgbstd::interface::{Rgb20, FungibleAllocation};
+use rgbstd::interface::{FungibleAllocation, Rgb20};
 use rgbstd::{
     contract::WitnessOrd,
     interface::{rgb20, ContractBuilder},
@@ -92,15 +91,24 @@ pub fn create_and_validate() {
         ),
     };
 
-    stock.import_contract(verified_contract, &mut DumbResolver {}).unwrap();
+    stock
+        .import_contract(verified_contract, &mut DumbResolver {})
+        .unwrap();
 
     // Reading contract state throught the interface from the stock
-    let contract = stock.contract_iface(contract_id, rgb20().iface_id()).unwrap();
+    let contract = stock
+        .contract_iface(contract_id, rgb20().iface_id())
+        .unwrap();
     let contract = Rgb20::from(contract);
     let allocations = contract.fungible("assetOwner", &None).unwrap();
     eprintln!("{}", serde_json::to_string(&contract.spec()).unwrap());
 
-    for FungibleAllocation { owner, witness, value} in allocations {
+    for FungibleAllocation {
+        owner,
+        witness,
+        value,
+    } in allocations
+    {
         eprintln!("amount: {value}, owner: {owner}, witness: {witness}");
     }
 
