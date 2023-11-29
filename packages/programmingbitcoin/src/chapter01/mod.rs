@@ -6,13 +6,13 @@ pub use error::*;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct FieldElement {
-    num: i64,
-    prime: i64,
+    num: u64,
+    prime: u64,
 }
 
 impl FieldElement {
-    pub fn new(num: i64, prime: i64) -> Result<FieldElement, Error> {
-        if num > prime || num < 0 {
+    pub fn new(num: u64, prime: u64) -> Result<FieldElement, Error> {
+        if num > prime {
             return Err(Error::ValueError { num, prime });
         }
 
@@ -109,16 +109,9 @@ mod tests {
     #[test]
     fn file_element_value_error_should_fail() {
         let a = FieldElement::new(17, 13);
-        let b = FieldElement::new(-17, 13);
 
         assert_eq!(Error::ValueError { num: 17, prime: 13 }, a.unwrap_err());
-        assert_eq!(
-            Error::ValueError {
-                num: -17,
-                prime: 13
-            },
-            b.unwrap_err()
-        );
+        
     }
 
     #[test]
@@ -175,5 +168,9 @@ mod tests {
 
         let res = a.pow(3);
         assert_eq!(res, c);
+
+        let c = FieldElement::new(17, 31).unwrap();
+        let d = FieldElement::new(15, 31).unwrap();
+        assert_eq!(c.pow(3), d);
     }
 }
