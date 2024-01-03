@@ -18,11 +18,83 @@ use bdk::{
         ExtendedKey, GeneratableKey, GeneratedKey,
     },
     miniscript::Segwitv0,
+    sled, Wallet, wallet::AddressIndex,
 };
 
 fn main() {
-    let (receive, change) = get_descriptors();
-    println!("recv: {:#?}, \nchange: {:#?}", receive, change);
+    // Create a RPC client
+    let rpc_auth = rpc_auth::UserPass("user".to_string(), "password".to_string());
+
+    let rpc = Client::new("http://127.0.0.1:18443/wallet/bitwai".to_string(), rpc_auth).unwrap();
+    println!("bitcoin info: {:#?}", rpc.get_blockchain_info());
+
+    // create bitwai wallet
+    rpc.create_wallet("bitwai", None, None, None, None).unwrap();
+    // get wwallet address
+    let core_address = rpc.get_new_address(None, None).unwrap();
+    println!("Core address: {:#?}", core_address);
+
+    // Generate 101 blocks and use the above address as coinbase
+    rpc.generate_to_address(101, &core_address).unwrap();
+
+    let core_balance = rpc.get_balance(None, None).unwrap();
+    // Show balance
+    println!("Balance: {:#?}", core_balance);
+
+    let (recv_desc, change_desc) = get_descriptors();
+    println!("recv: {:#?}, \nchange: {:#?}", recv_desc, change_desc);
+
+    let wallet_name = wallet_name_from_descriptor(
+        &recv_desc,
+        Some(&change_desc),
+        Network::Regtest,
+        &Secp256k1::new(),
+    )
+    .unwrap();
+
+    // Create the datadir to store the wallet data
+    let mut datadir = dirs_next::home_dir().unwrap();
+    datadir.push(".bitwai");
+    let database = sled::open(datadir).unwrap();
+    let db_tree = database.open_tree(wallet_name.clone()).unwrap();
+
+    // Set RPC username
+    let rpc_url = "http://127.0.0.1:18443".to_string();
+    let auth = Auth::UserPass {
+        username: "user".to_string(),
+        password: "password".to_string(),
+    };
+    let rpc_config = RpcConfig {
+        url: rpc_url,
+        auth,
+        network: Network::Regtest,
+        wallet_name,
+        skip_blocks: None,
+    };
+
+    // Create blockchain backend with config
+    let blockchain = RpcBlockchain::from_config(&rpc_config).unwrap();
+
+    let wallet = Wallet::new(&recv_desc, Some(&change_desc), Network::Regtest, db_tree, blockchain).unwrap();
+
+    wallet.sync(NoopProgress, None).unwrap();
+
+    // Fetch a fresh address to receive coins
+    let address = wallet.get_address(AddressIndex::New).unwrap();
+    
+    println!("bdk client address: {:#?}", address);
+
+    // Send 10 BTC from Core to BDK client
+    rpc.send_to_address(&address, Amount::from_btc(10.0).unwrap(), None, None, None, None, None, None).unwrap();
+
+    // Confirm transaction by generate some blocks
+    rpc.generate_to_address(1, &core_address).unwrap();
+
+    // Sync the BDK client wallet
+    wallet.sync(NoopProgress, None).unwrap();
+
+    // 
+
 }
 
 // Generate fresh desciptor strings and return them via (receive, change) tuple
