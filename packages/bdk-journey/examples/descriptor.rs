@@ -64,5 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         txid = txid,
     );
 
+    println!("{:#?}", raw_transaction);
+
     Ok(())
 }
