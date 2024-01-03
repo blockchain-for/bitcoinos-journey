@@ -18,7 +18,9 @@ use bdk::{
         ExtendedKey, GeneratableKey, GeneratedKey,
     },
     miniscript::Segwitv0,
-    sled, Wallet, wallet::AddressIndex,
+    sled,
+    wallet::{tx_builder, AddressIndex},
+    SignOptions, TxBuilder, Wallet,
 };
 
 fn main() {
@@ -75,17 +77,34 @@ fn main() {
     // Create blockchain backend with config
     let blockchain = RpcBlockchain::from_config(&rpc_config).unwrap();
 
-    let wallet = Wallet::new(&recv_desc, Some(&change_desc), Network::Regtest, db_tree, blockchain).unwrap();
+    let wallet = Wallet::new(
+        &recv_desc,
+        Some(&change_desc),
+        Network::Regtest,
+        db_tree,
+        blockchain,
+    )
+    .unwrap();
 
     wallet.sync(NoopProgress, None).unwrap();
 
     // Fetch a fresh address to receive coins
     let address = wallet.get_address(AddressIndex::New).unwrap();
-    
+
     println!("bdk client address: {:#?}", address);
 
     // Send 10 BTC from Core to BDK client
-    rpc.send_to_address(&address, Amount::from_btc(10.0).unwrap(), None, None, None, None, None, None).unwrap();
+    rpc.send_to_address(
+        &address,
+        Amount::from_btc(10.0).unwrap(),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
 
     // Confirm transaction by generate some blocks
     rpc.generate_to_address(1, &core_address).unwrap();
@@ -93,8 +112,38 @@ fn main() {
     // Sync the BDK client wallet
     wallet.sync(NoopProgress, None).unwrap();
 
-    // 
+    // Create a transaction builder using wallet
+    let mut tx_builder = wallet.build_tx();
 
+    // Set recipient of the tx
+    tx_builder.set_recipients(vec![(core_address.script_pubkey(), 500_000_000)]);
+
+    // Finalise the tx and extract PSBT
+    let (mut psbt, _) = tx_builder.finish().unwrap();
+
+    // Sign the PSBT
+    let sign_option = SignOptions {
+        assume_height: None,
+        ..Default::default()
+    };
+    wallet.sign(&mut psbt, sign_option).unwrap();
+
+    // Extract the final transaction
+    let tx = psbt.extract_tx();
+
+    wallet.broadcast(tx).unwrap();
+
+    // Confirm transaction by generating some blocks
+    rpc.generate_to_address(1, &core_address).unwrap();
+
+    // Sync the BDK client wallet
+    wallet.sync(NoopProgress, None).unwrap();
+
+    // Fetch and display wallet balances
+    let core_balance = rpc.get_balance(None, None).unwrap();
+    let bdk_balance = Amount::from_sat(wallet.get_balance().unwrap());
+    println!("Core wallet Balance: {:#?}", core_balance);
+    println!("BDK wallet Balance: {:#?}", bdk_balance);
 }
 
 // Generate fresh desciptor strings and return them via (receive, change) tuple
