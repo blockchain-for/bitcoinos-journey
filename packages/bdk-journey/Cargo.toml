@@ -6,10 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bdk = { version = "0.29", features = ["all-keys"] }
-
+bdk = { version = "0.29", features = ["all-keys"], optional = false}
+bdk_file_store = "0.2"
+bdk_esplora = { version = "0.4", features = ["async"] }
 
 # bdk = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "1.0.0-alpha.1" }
 # bdk_esplora = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "0.3.0" }
 # bdk_file_store = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "0.2.0" }
+
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
