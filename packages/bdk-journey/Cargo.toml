@@ -10,8 +10,9 @@ bdk = { version = "0.29", features = ["all-keys"], optional = false}
 bdk_file_store = "0.2"
 bdk_esplora = { version = "0.4", features = ["async"] }
 
-# bdk = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "1.0.0-alpha.1" }
+# bdk = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "1.0.0-alpha.1", features = ["keys-bip39"]}
 # bdk_esplora = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "0.3.0" }
 # bdk_file_store = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "0.2.0" }
-
+# bdk_chain = "0.6"
+# bip39 = { version = "^1.0.1", optional = false }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
