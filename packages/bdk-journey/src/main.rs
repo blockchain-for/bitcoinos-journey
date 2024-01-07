@@ -29,16 +29,18 @@ fn main() {
 
     let mnemonic_clone = mnemonic.clone();
 
-    // Generate a extended key
+    // Generate a extended key from mnemonic
     let xkey: ExtendedKey = mnemonic.into_extended_key().unwrap();
     let xkey2: ExtendedKey = mnemonic_clone.into_extended_key().unwrap();
 
     // Get xprv from the extended key
+    // full path mnemonic -> ExtendedKey -> xprv
     let xprv = xkey.into_xprv(network).unwrap();
     println!("xprv: {:?}", xprv.to_string());
 
     println!("private key: {:?}", xprv.private_key.display_secret());
 
+    // xprv -> xpub
     let xpub = xkey2.into_xpub(network, &Secp256k1::default());
     println!("xpub: {:?}", xpub.to_string());
 
