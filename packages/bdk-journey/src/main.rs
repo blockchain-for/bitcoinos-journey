@@ -1,66 +1,98 @@
-use bdk::bitcoin::secp256k1::Secp256k1;
-use bdk::bitcoin::Network;
-use bdk::database::MemoryDatabase;
-use bdk::keys::bip39::{Language, Mnemonic, WordCount};
-use bdk::keys::DerivableKey;
-use bdk::keys::ExtendedKey;
-use bdk::keys::GeneratableKey;
-use bdk::keys::GeneratedKey;
-use bdk::miniscript;
-use bdk::template::Bip84;
-use bdk::Wallet;
+use std::{io::Write, str::FromStr};
 
-fn main() {
-    println!("Hello, BDK developer!");
+use bdk::{
+    bitcoin::{Address, Network},
+    wallet::{AddressIndex, Update, ChangeSet},
+    SignOptions, Wallet,
+};
+use bdk_esplora::{esplora_client, EsploraAsyncExt};
+use bdk_file_store::Store;
 
-    let network = Network::Regtest;
+const DB_MAGIC: &str = "bdk_wallet_esplora_async_example";
+const SEND_AMOUNT: u64 = 5000;
+const STOP_GAP: usize = 50;
+const PARALLEL_REQUESTS: usize = 5;
 
-    // Generate fresh mnemonic
-    let mnemonic: GeneratedKey<_, miniscript::Segwitv0> =
-        Mnemonic::generate((WordCount::Words12, Language::English)).unwrap();
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
+    let db_path = std::env::temp_dir().join("bdk-esplora-async-example");
+    let db: Store<'_, ChangeSet> = Store::<ChangeSet>::open_or_create_new(DB_MAGIC.as_bytes(), db_path)?;
+    let external_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/1'/0'/0/*)";
+    let internal_descriptor = "wpkh(tprv8ZgxMBicQKsPdy6LMhUtFHAgpocR8GC6QmwMSFpZs7h6Eziw3SpThFfczTDh5rW2krkqffa11UpX3XkeTTB2FvzZKWXqPY54Y6Rq4AQ5R8L/84'/1'/0'/1/*)";
 
-    // Convert mnemonic to string
-    let mnemonic_words = mnemonic.to_string();
-    println!("Mnemonic words: {:?}", mnemonic_words);
+    let mut wallet = Wallet::new_or_load(
+        external_descriptor,
+        Some(internal_descriptor),
+        db,
+        Network::Testnet,
+    )?;
 
-    // Parse mnemonic
-    let mnemonic = Mnemonic::parse(&mnemonic_words).unwrap();
-    println!("Mnemonic: {:?}", mnemonic);
+    let address = wallet.try_get_address(AddressIndex::New)?;
+    println!("Generated Address: {}", address);
 
-    let mnemonic_clone = mnemonic.clone();
+    let balance = wallet.get_balance();
+    println!("Wallet balance before syncing: {} sats", balance.total());
 
-    // Generate a extended key from mnemonic
-    let xkey: ExtendedKey = mnemonic.into_extended_key().unwrap();
-    let xkey2: ExtendedKey = mnemonic_clone.into_extended_key().unwrap();
+    print!("Syncing...");
+    let client =
+        esplora_client::Builder::new("https://blockstream.info/testnet/api").build_async()?;
 
-    // Get xprv from the extended key
-    // full path mnemonic -> ExtendedKey -> xprv
-    let xprv = xkey.into_xprv(network).unwrap();
-    println!("xprv: {:?}", xprv.to_string());
+    let prev_tip = wallet.latest_checkpoint();
+    let keychain_spks = wallet
+        .spks_of_all_keychains()
+        .into_iter()
+        .map(|(k, k_spks)| {
+            let mut once = Some(());
+            let mut stdout = std::io::stdout();
+            let k_spks = k_spks
+                .inspect(move |(spk_i, _)| match once.take() {
+                    Some(_) => print!("\nScanning keychain [{:?}]", k),
+                    None => print!(" {:<3}", spk_i),
+                })
+                .inspect(move |_| stdout.flush().expect("must flush"));
+            (k, k_spks)
+        })
+        .collect();
+    let (update_graph, last_active_indices) = client
+        .full_scan(keychain_spks, STOP_GAP, PARALLEL_REQUESTS)
+        .await?;
+    let missing_heights = update_graph.missing_heights(wallet.local_chain());
+    let chain_update = client.update_local_chain(prev_tip, missing_heights).await?;
+    let update = Update {
+        last_active_indices,
+        graph: update_graph,
+        chain: Some(chain_update),
+    };
+    wallet.apply_update(update)?;
+    wallet.commit()?;
+    println!();
 
-    println!("private key: {:?}", xprv.private_key.display_secret());
+    let balance = wallet.get_balance();
+    println!("Wallet balance after syncing: {} sats", balance.total());
 
-    // xprv -> xpub
-    let xpub = xkey2.into_xpub(network, &Secp256k1::default());
-    println!("xpub: {:?}", xpub.to_string());
+    if balance.total() < SEND_AMOUNT {
+        println!(
+            "Please send at least {} sats to the receiving address",
+            SEND_AMOUNT
+        );
+        std::process::exit(0);
+    }
 
-    // Create a BDK wallet structure use BIP 84 descriptor ("m/84h/1h/0h/0" and "m/84h/1h/0h/1")
-    let wallet = Wallet::new(
-        Bip84(xprv, bdk::KeychainKind::External),
-        Some(Bip84(xprv, bdk::KeychainKind::Internal)),
-        network,
-        MemoryDatabase::default(),
-    )
-    .unwrap();
+    let faucet_address = Address::from_str("mkHS9ne12qx9pS9VojpwU5xtRd4T7X7ZUt")?
+        .require_network(Network::Testnet)?;
 
-    println!(
-        "mnemonic: {}\n\nrecv desc (pub key): {:#?}\n\nchng desc (pub key): {:#?}",
-        mnemonic_words,
-        wallet
-            .get_descriptor_for_keychain(bdk::KeychainKind::External)
-            .to_string(),
-        wallet
-            .get_descriptor_for_keychain(bdk::KeychainKind::Internal)
-            .to_string(),
-    );
+    let mut tx_builder = wallet.build_tx();
+    tx_builder
+        .add_recipient(faucet_address.script_pubkey(), SEND_AMOUNT)
+        .enable_rbf();
+
+    let mut psbt = tx_builder.finish()?;
+    let finalized = wallet.sign(&mut psbt, SignOptions::default())?;
+    assert!(finalized);
+
+    let tx = psbt.extract_tx();
+    client.broadcast(&tx).await?;
+    println!("Tx broadcasted! Txid: {}", tx.txid());
+
+    Ok(())
 }

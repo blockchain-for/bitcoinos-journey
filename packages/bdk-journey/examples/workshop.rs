@@ -91,10 +91,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Create a wallet and get a new address
-    type ChangeSet = Vec<String>;
-    let db = Store::<ChangeSet>::new_from_path(DB_MAGIC, CHAIN_DATA_FILE)?;
+    let db = Store::<bdk::wallet::ChangeSet>::open_or_create_new(DB_MAGIC, CHAIN_DATA_FILE)?;
 
-    let wallet = Wallet::new(external_desc, Some(internal_desc), network, db.into())?;
+    let wallet = Wallet::new(external_desc, Some(internal_desc), db, network)?;
 
     let address = wallet.get_address(AddressIndex::New)?;
     let balance = wallet.get_balance()?;
@@ -233,7 +232,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         utxo.outpoint, utxo.txout.value
                     );
                     // Flush early to ensure we print at every iteration.
-                    let _ = io::stderr().flush();
+                    let _ = std::io::stderr().flush();
                 })
                 .map(|utxo| utxo.outpoint);
             outpoints = Box::new(utxo_outpoints);

@@ -6,9 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bdk = { version = "0.29", features = ["all-keys"], optional = false}
-bdk_file_store = "0.2"
-bdk_esplora = { version = "0.4", features = ["async"] }
+anyhow = "1"
+# bdk = { version = "0.29", features = ["all-keys"], optional = false}
+# bdk = { version = "1.0.0-alpha.3", features = ["all-keys"] }
+# bdk_file_store = { git = "https://github.com/bitcoindevkit/bdk", branch = "master"}
+# bdk_esplora = { git = "https://github.com/bitcoindevkit/bdk", branch = "master", features = ["async"] }
+
+bdk = { path = "./../bdk/crates/bdk" }
+bdk_esplora = { path = "../bdk/crates/esplora", features = ["async-https"] }
+bdk_file_store = { path = "../bdk/crates/file_store" }
 
 # bdk = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "1.0.0-alpha.1", features = ["keys-bip39"]}
 # bdk_esplora = { git = "https://github.com/notmandatory/bdk.git", branch = "test/esplora_tests", version = "0.3.0" }
