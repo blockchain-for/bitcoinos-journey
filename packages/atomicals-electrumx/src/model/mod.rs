@@ -5,8 +5,6 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-pub type AnyhowResult<T> = anyhow::Result<T>;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Params<P>
 where

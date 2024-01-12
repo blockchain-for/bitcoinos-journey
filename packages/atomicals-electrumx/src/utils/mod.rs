@@ -1,7 +1,7 @@
 use bitcoin::Address;
 use sha2::{Digest, Sha256};
 
-use crate::model::AnyhowResult;
+use crate::AnyhowResult;
 
 pub fn address2scripthash(address: &Address) -> AnyhowResult<String> {
     let mut hasher = Sha256::new();

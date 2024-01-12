@@ -5,8 +5,8 @@ use serde::{de::DeserializeOwned, Serialize};
 use tokio::time;
 
 use crate::{
-    model::{AnyhowResult, Ft, GlobalResponse, Params, Response, Ticker, Unspent, Utxo},
-    utils,
+    model::{Ft, GlobalResponse, Params, Response, Ticker, Unspent, Utxo},
+    utils, AnyhowResult,
 };
 
 pub trait Config {

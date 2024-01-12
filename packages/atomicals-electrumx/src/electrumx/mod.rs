@@ -6,7 +6,7 @@ use reqwest::Client as ReqwestClient;
 pub use http::*;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::model::AnyhowResult;
+use crate::AnyhowResult;
 
 #[derive(Debug)]
 pub struct ElectrumX {
