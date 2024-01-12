@@ -1,6 +1,11 @@
+pub mod request;
+pub mod response;
+
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
+
+pub type AnyhowResult<T> = anyhow::Result<T>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Params<P>
@@ -23,14 +28,14 @@ where
 #[derive(Debug, Deserialize)]
 pub struct Response<R> {
     pub success: bool,
-    pub message: Option<String>,
-    pub data: Option<R>,
+    // pub message: Option<String>,
+    pub response: R,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GlobalResponse<R> {
     pub global: Option<Global>,
-    pub data: R,
+    pub result: R,
 }
 
 #[derive(Debug, Deserialize)]
@@ -195,10 +200,10 @@ pub struct MintInfo {
 }
 
 // TODO: Check the real type.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Ctx {}
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Unspent {
     pub txid: String,
     pub tx_hash: String,
@@ -211,14 +216,16 @@ pub struct Unspent {
     pub atomicals: Vec<()>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Utxo {
     pub txid: String,
     // The same as `output_index` and `index`.
     pub vout: u32,
     pub value: u64,
+    // TODO: check type
     pub atomicals: Vec<()>,
 }
+
 impl From<Unspent> for Utxo {
     fn from(v: Unspent) -> Self {
         Self {
