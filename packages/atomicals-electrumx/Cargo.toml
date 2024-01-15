@@ -9,6 +9,8 @@ edition = "2021"
 anyhow = { version = "1.0" }
 array-bytes        = { version = "6.2" }
 bitcoin = { version = "0.31", features = ["rand-std"] }
+ciborium  = "0.2"
+num_cpus = "1.16"
 rand = { version = "0.8" }
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }

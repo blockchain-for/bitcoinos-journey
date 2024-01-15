@@ -24,7 +24,8 @@ pub struct Payload {
 pub struct TransactionData {
     pub secp: Secp256k1<All>,
     pub satsbyte: u64,
-    pub bitwork_info: String,
+    // bitwork_info_commit: BitworkInfo,
+    pub bitwork_info_commit: String,
     pub additional_outputs: Vec<TxOut>,
     pub reveal_script: ScriptBuf,
     pub reveal_spend_info: TaprootSpendInfo,

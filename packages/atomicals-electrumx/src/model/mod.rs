@@ -73,8 +73,8 @@ pub struct Ft {
     pub max_mints: u64,
     #[serde(rename = "$max_supply")]
     pub max_supply: u64,
-    #[serde(rename = "$mint_count")]
-    pub mint_count: u64,
+    #[serde(rename = "$mint_amount")]
+    pub mint_amount: u64,
     #[serde(rename = "$mint_bitcworkc")]
     pub mint_bitworkc: String,
     #[serde(rename = "$mint_height")]

@@ -8,8 +8,8 @@ use crate::wallet::Wallet;
 
 #[derive(Debug, Clone)]
 pub(super) struct EngineWallet {
-    stash: Key,
-    funding: Key,
+    pub stash: Key,
+    pub funding: Key,
 }
 
 impl EngineWallet {
@@ -34,13 +34,13 @@ impl EngineWallet {
 
 #[derive(Debug, Clone)]
 pub(super) struct Key {
-    pair: Keypair,
-    x_only_public_key: XOnlyPublicKey,
-    address: Address,
+    pub pair: Keypair,
+    pub x_only_public_key: XOnlyPublicKey,
+    pub address: Address,
 }
 
 #[derive(Debug, Clone)]
 pub(super) struct KeyAlias {
-    alias: String,
-    key: String,
+    pub alias: String,
+    pub key: String,
 }
