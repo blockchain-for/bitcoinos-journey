@@ -2,27 +2,33 @@ use std::path::PathBuf;
 
 use bitcoin::Network;
 
-use crate::{electrumx::ElectrumX, AnyhowResult};
+use crate::{electrumx::ElectrumX, wallet::Wallet, AnyhowResult};
 
-use super::{tx::TransactionData, wallet::Wallet};
+use super::{tx::TransactionData, wallet::EngineWallet};
 
 pub struct Miner {
     pub network: Network,
     pub electrumx: ElectrumX,
-    pub wallets: Vec<Wallet>,
+    pub wallets: Vec<EngineWallet>,
     ticker: String,
     max_fee: u64,
 }
 
 impl Miner {
-    pub async fn mine(&self, wallet: &Wallet) -> AnyhowResult<()> {
+    pub async fn mine(&self, wallet: &EngineWallet) -> AnyhowResult<()> {
         let data = self.prepare_data(wallet).await?;
+
+        let reveal_spk = todo!();
+        let funding_spk = todo!();
+
+        let commit_input = todo!();
+        let commit_ouput = todo!();
 
         // Construct tx data
         todo!()
     }
 
-    pub async fn prepare_data(&self, wallet: &Wallet) -> AnyhowResult<TransactionData> {
+    pub async fn prepare_data(&self, wallet: &EngineWallet) -> AnyhowResult<TransactionData> {
         todo!()
     }
 }
@@ -53,6 +59,18 @@ impl MinerBuilder {
     }
 
     pub fn build(&self) -> AnyhowResult<Miner> {
-        todo!()
+        let electrumx = ElectrumX::new(self.network, self.electrumx.as_str(), 30)?;
+        let wallets = Wallet::load_wallets(self.wallet_dir.as_path())
+            .into_iter()
+            .map(|rw| EngineWallet::from_raw_wallet(rw, self.network))
+            .collect::<Result<_>>()?;
+
+        Ok(Miner {
+            network: self.network,
+            electrumx,
+            wallets,
+            ticker: self.ticker,
+            max_fee: self.max_fee,
+        })
     }
 }

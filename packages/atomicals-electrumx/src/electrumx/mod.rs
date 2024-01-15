@@ -1,7 +1,9 @@
 pub mod http;
 
+use std::time::Duration;
+
 use bitcoin::network::Network;
-use reqwest::Client as ReqwestClient;
+use reqwest::{Client as ReqwestClient, ClientBuilder};
 
 pub use http::*;
 use serde::{de::DeserializeOwned, Serialize};
@@ -44,5 +46,21 @@ impl Http for ElectrumX {
         tracing::info!("{:?}", resp);
 
         Ok(serde_json::from_str(&resp)?)
+    }
+}
+
+impl ElectrumX {
+    pub fn new(
+        network: Network,
+        base_uri: impl Into<String>,
+        timeout_secs: u64,
+    ) -> AnyhowResult<Self> {
+        Ok(Self {
+            client: ClientBuilder::new()
+                .timeout(Duration::from_secs(timeout_secs))
+                .build()?,
+            network,
+            base_uri: base_uri.into(),
+        })
     }
 }

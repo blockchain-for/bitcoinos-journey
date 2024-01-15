@@ -3,8 +3,22 @@ use bitcoin::{
     taproot::TaprootSpendInfo,
     ScriptBuf, TxOut,
 };
+use serde::{Deserialize, Serialize};
 
 use crate::model::Utxo;
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PayloadWrapper {
+    pub args: Payload,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Payload {
+    pub bitworkc: String,
+    pub mint_ticker: String,
+    pub nonce: u64,
+    pub time: u64,
+}
 
 #[derive(Clone, Debug)]
 pub struct TransactionData {

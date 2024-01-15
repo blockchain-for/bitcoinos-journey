@@ -1,4 +1,4 @@
-use bitcoin::Address;
+use bitcoin::{secp256k1::Keypair, Address, PrivateKey};
 use sha2::{Digest, Sha256};
 
 use crate::AnyhowResult;
@@ -11,4 +11,14 @@ pub fn address2scripthash(address: &Address) -> AnyhowResult<String> {
     hash.reverse();
 
     Ok(array_bytes::bytes2hex("", hash))
+}
+
+pub fn keypair_from_wif<S>(wif: S) -> AnyhowResult<Keypair>
+where
+    S: AsRef<str>,
+{
+    Ok(Keypair::from_secret_key(
+        &Default::default(),
+        &PrivateKey::from_wif(wif.as_ref())?.inner,
+    ))
 }
