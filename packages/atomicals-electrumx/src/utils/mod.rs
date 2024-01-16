@@ -113,7 +113,9 @@ pub fn build_reveal_script(
 
     payload
         .chunks(520)
-        .fold(script_builder, |b, c| b.push_slice(<&PushBytes>::try_from(c).unwrap()))
+        .fold(script_builder, |b, c| {
+            b.push_slice(<&PushBytes>::try_from(c).unwrap())
+        })
         .push_opcode(OP_ENDIF)
         .into_script()
 }

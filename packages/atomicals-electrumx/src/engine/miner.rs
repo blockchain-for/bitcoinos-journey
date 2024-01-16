@@ -1,41 +1,192 @@
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    thread::JoinHandle,
+};
 
-use bitcoin::{secp256k1::Secp256k1, taproot::TaprootBuilder, Amount, Network, TxOut};
+use bitcoin::{
+    absolute::LockTime,
+    hashes::Hash,
+    key::TapTweak,
+    psbt::Input,
+    secp256k1::{Message, Secp256k1},
+    sighash::{Prevouts, SighashCache},
+    taproot::{Signature, TaprootBuilder},
+    transaction::Version,
+    Amount, Network, OutPoint, Psbt, ScriptBuf, Sequence, TapSighashType, Transaction, TxIn, TxOut,
+    Witness,
+};
 
 use crate::{
     electrumx::{Api, ElectrumX},
     engine::tx::{Payload, PayloadWrapper},
-    model::Ft,
-    utils,
+    model::{Ft, Utxo},
+    utils::{self, sequence_ranges_by_cpus},
     wallet::Wallet,
     AnyhowResult,
 };
 
-use super::{tx::TransactionData, wallet::EngineWallet};
+use super::{
+    tx::{Fees, TransactionData},
+    wallet::EngineWallet,
+    OUTPUT_BYTES_BASE,
+};
 
 pub struct Miner {
     pub network: Network,
     pub electrumx: ElectrumX,
     pub wallets: Vec<EngineWallet>,
-    ticker: String,
-    max_fee: u64,
+    pub ticker: String,
+    pub max_fee: u64,
 }
 
 impl Miner {
     pub async fn mine(&self, wallet: &EngineWallet) -> AnyhowResult<()> {
-        let data = self.prepare_data(wallet).await?;
+        let tx_data = self.prepare_data(wallet).await?;
 
-        let reveal_spk = todo!();
-        let funding_spk = todo!();
+        let TransactionData {
+            secp,
+            satsbyte,
+            bitwork_info_commit,
+            additional_outputs,
+            reveal_script,
+            reveal_spend_info,
+            fees,
+            funding_utxo,
+        } = tx_data;
 
-        let commit_input = todo!();
-        let commit_ouput = todo!();
+        let reveal_spk = ScriptBuf::new_p2tr(
+            &secp,
+            reveal_spend_info.internal_key(),
+            reveal_spend_info.merkle_root(),
+        );
+        let funding_spk = wallet.funding.address.script_pubkey();
 
+        let commit_input = vec![TxIn {
+            previous_output: OutPoint::new(funding_utxo.txid.parse()?, funding_utxo.vout),
+            ..Default::default()
+        }];
+        let commit_output = assemble_commit_output(
+            fees,
+            reveal_spk,
+            funding_utxo.clone(),
+            funding_spk.clone(),
+            satsbyte,
+            OUTPUT_BYTES_BASE,
+        );
+
+        let commit_prevouts = vec![TxOut {
+            value: Amount::from_sat(funding_utxo.value),
+            script_pubkey: funding_spk.clone(),
+        }];
+
+        let mut ts: Vec<JoinHandle<AnyhowResult<()>>> = vec![];
+        let solution_found = Arc::new(AtomicBool::new(false));
+
+        let maybe_commit_tx = Arc::new(Mutex::new(None));
+
+        sequence_ranges_by_cpus(u32::MAX)
+            .into_iter()
+            .enumerate()
+            .for_each(|(i, r)| {
+                tracing::info!("spawning thread {i} for sequence range {r:?}");
+
+                let secp = secp.clone();
+                let bitwork_info_commit = bitwork_info_commit.clone();
+                let funding_kp = wallet.funding.pair.tap_tweak(&secp, None).to_inner();
+                let funding_xpk = wallet.funding.x_only_public_key;
+                let input = commit_input.clone();
+                let output = commit_output.clone();
+                let prevouts = commit_prevouts.clone();
+                let hash_ty = TapSighashType::Default;
+                let solution_found = solution_found.clone();
+                let maybe_tx = maybe_commit_tx.clone();
+
+                ts.push(std::thread::spawn(move || {
+                    for s in r {
+                        if solution_found.load(Ordering::Relaxed) {
+                            return Ok(());
+                        }
+
+                        let mut psbt = Psbt::from_unsigned_tx(Transaction {
+                            version: Version::ONE,
+                            lock_time: LockTime::ZERO,
+                            input: {
+                                let mut i = input.clone();
+
+                                i[0].sequence = Sequence(s);
+
+                                i
+                            },
+                            output: output.clone(),
+                        })?;
+                        let tap_key_sig = {
+                            let h = SighashCache::new(&psbt.unsigned_tx)
+                                .taproot_key_spend_signature_hash(
+                                    0,
+                                    &Prevouts::All(&prevouts),
+                                    hash_ty,
+                                )?;
+                            let m = Message::from_digest(h.to_byte_array());
+
+                            Signature {
+                                sig: secp.sign_schnorr(&m, &funding_kp),
+                                hash_ty,
+                            }
+                        };
+
+                        psbt.inputs[0] = Input {
+                            witness_utxo: Some(prevouts[0].clone()),
+                            final_script_witness: {
+                                let mut w = Witness::new();
+
+                                w.push(tap_key_sig.to_vec());
+
+                                Some(w)
+                            },
+                            tap_key_sig: Some(tap_key_sig),
+                            tap_internal_key: Some(funding_xpk),
+                            ..Default::default()
+                        };
+
+                        tracing::trace!("{psbt:#?}");
+
+                        let tx = psbt.extract_tx_unchecked_fee_rate();
+                        let txid = tx.txid();
+
+                        if txid
+                            .to_string()
+                            .trim_start_matches("0x")
+                            .starts_with(&bitwork_info_commit)
+                        {
+                            tracing::info!("solution found");
+                            tracing::info!("sequence {s}");
+                            tracing::info!("commit txid {txid}");
+                            tracing::info!("commit tx {tx:#?}");
+
+                            solution_found.store(true, Ordering::Relaxed);
+                            *maybe_tx.lock().unwrap() = Some(tx);
+
+                            return Ok(());
+                        }
+                    }
+
+                    Ok(())
+                }));
+            });
         // Construct tx data
+
+        for t in ts {
+            t.join().unwrap()?;
+        }
+
         todo!()
     }
 
-    pub async fn prepare_data(&self, wallet: &EngineWallet) -> AnyhowResult<TransactionData> {
+    async fn prepare_data(&self, wallet: &EngineWallet) -> AnyhowResult<TransactionData> {
         let ft = self.validate().await?;
 
         let secp = Secp256k1::new();
@@ -165,5 +316,53 @@ impl MinerBuilder {
             ticker: self.ticker.clone(),
             max_fee: self.max_fee,
         })
+    }
+}
+
+fn assemble_commit_output(
+    fees: Fees,
+    reveal_spk: ScriptBuf,
+    funding_utxo: Utxo,
+    funding_spk: ScriptBuf,
+    satsbyte: u64,
+    output_bytes_bass: f64,
+) -> Vec<TxOut> {
+    let spend = TxOut {
+        value: Amount::from_sat(fees.reveal_and_outputs),
+        script_pubkey: reveal_spk.clone(),
+    };
+
+    let refund = assemble_refund(
+        fees,
+        funding_utxo.value,
+        funding_spk,
+        satsbyte,
+        output_bytes_bass,
+    );
+
+    match refund {
+        Some(r) => vec![spend, r],
+        None => vec![spend],
+    }
+}
+
+fn assemble_refund(
+    fees: Fees,
+    funding_value: u64,
+    funding_spk: ScriptBuf,
+    satsbyte: u64,
+    output_bytes_bass: f64,
+) -> Option<TxOut> {
+    let r = funding_value
+        .saturating_sub(fees.reveal_and_outputs)
+        .saturating_sub(fees.commit + (output_bytes_bass * satsbyte as f64).floor() as u64);
+
+    if r > 0 {
+        Some(TxOut {
+            value: Amount::from_sat(r),
+            script_pubkey: funding_spk.clone(),
+        })
+    } else {
+        None
     }
 }
