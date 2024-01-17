@@ -10,7 +10,7 @@ use bitcoin::{
     },
     script::PushBytes,
     secp256k1::Keypair,
-    Address, PrivateKey, Script, ScriptBuf, TxOut, XOnlyPublicKey,
+    Address, PrivateKey, Script, ScriptBuf, XOnlyPublicKey,
 };
 use rand::Rng;
 use serde::{Deserialize, Serialize};

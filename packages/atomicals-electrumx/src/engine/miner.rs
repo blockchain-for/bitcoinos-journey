@@ -9,15 +9,16 @@ use std::{
 
 use bitcoin::{
     absolute::LockTime,
+    consensus::encode,
     hashes::Hash,
     key::TapTweak,
     psbt::Input,
     secp256k1::{Message, Secp256k1},
     sighash::{Prevouts, SighashCache},
-    taproot::{Signature, TaprootBuilder},
+    taproot::{LeafVersion, Signature, TaprootBuilder},
     transaction::Version,
-    Amount, Network, OutPoint, Psbt, ScriptBuf, Sequence, TapSighashType, Transaction, TxIn, TxOut,
-    Witness,
+    Address, Amount, Network, OutPoint, Psbt, ScriptBuf, Sequence, TapSighashType, Transaction,
+    TxIn, TxOut, Witness,
 };
 
 use crate::{
@@ -70,8 +71,8 @@ impl Miner {
             ..Default::default()
         }];
         let commit_output = assemble_commit_output(
-            fees,
-            reveal_spk,
+            fees.clone(),
+            reveal_spk.clone(),
             funding_utxo.clone(),
             funding_spk.clone(),
             satsbyte,
@@ -177,13 +178,89 @@ impl Miner {
                     Ok(())
                 }));
             });
-        // Construct tx data
 
         for t in ts {
             t.join().unwrap()?;
         }
 
-        todo!()
+        let commit_tx = maybe_commit_tx.lock().unwrap().take().unwrap();
+
+        self.electrumx
+            .broadcast(encode::serialize_hex(&commit_tx))
+            .await?;
+
+        let commit_txid = commit_tx.txid();
+        let commit_txid_ = self
+            .electrumx
+            .wait_until_utxo(
+                Address::from_script(&reveal_spk, self.network)?.to_string(),
+                fees.reveal_and_outputs,
+            )
+            .await?
+            .txid;
+
+        assert_eq!(commit_txid, commit_txid_.parse()?);
+
+        let mut reveal_psbt = Psbt::from_unsigned_tx(Transaction {
+            version: Version::ONE,
+            lock_time: LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::new(commit_txid, 0),
+                sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                ..Default::default()
+            }],
+            output: additional_outputs,
+        })?;
+        let reveal_st = TapSighashType::SinglePlusAnyoneCanPay;
+        let reveal_tks = {
+            let lh = reveal_script.tapscript_leaf_hash();
+            let h = SighashCache::new(&reveal_psbt.unsigned_tx)
+                .taproot_script_spend_signature_hash(
+                    0,
+                    &Prevouts::One(0, commit_output[0].clone()),
+                    lh,
+                    reveal_st,
+                )?;
+            let m = Message::from_digest(h.to_byte_array());
+
+            Signature {
+                sig: secp.sign_schnorr(&m, &wallet.funding.pair),
+                hash_ty: reveal_st,
+            }
+        };
+
+        reveal_psbt.inputs[0] = Input {
+            witness_utxo: Some(commit_output[0].clone()),
+            tap_internal_key: Some(reveal_spend_info.internal_key()),
+            tap_merkle_root: reveal_spend_info.merkle_root(),
+            final_script_witness: {
+                let mut w = Witness::new();
+
+                w.push(reveal_tks.to_vec());
+                w.push(reveal_script.as_bytes());
+                w.push(
+                    reveal_spend_info
+                        .control_block(&(reveal_script, LeafVersion::TapScript))
+                        .unwrap()
+                        .serialize(),
+                );
+
+                Some(w)
+            },
+            ..Default::default()
+        };
+
+        let reveal_tx = reveal_psbt.extract_tx_unchecked_fee_rate();
+        let reveal_txid = reveal_tx.txid();
+
+        tracing::info!("reveal txid {reveal_txid}");
+        tracing::info!("reveal tx {reveal_tx:#?}");
+
+        self.electrumx
+            .broadcast(encode::serialize_hex(&reveal_tx))
+            .await?;
+
+        Ok(())
     }
 
     async fn prepare_data(&self, wallet: &EngineWallet) -> AnyhowResult<TransactionData> {
@@ -232,7 +309,7 @@ impl Miner {
 
         let funding_utxo = self
             .electrumx
-            .wait_util_utxo(
+            .wait_until_utxo(
                 wallet.funding.address.to_string(),
                 fees.commit_and_reveal_and_outputs,
             )

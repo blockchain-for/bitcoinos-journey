@@ -84,7 +84,7 @@ pub trait Api: Config + Http {
             .await
     }
 
-    async fn wait_util_utxo<S>(&self, address: S, satoshi: u64) -> AnyhowResult<Utxo>
+    async fn wait_until_utxo<S>(&self, address: S, satoshi: u64) -> AnyhowResult<Utxo>
     where
         S: AsRef<str>,
     {
