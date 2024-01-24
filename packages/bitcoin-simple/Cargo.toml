@@ -1,0 +1,32 @@
+[package]
+name = "bitcoind"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+secp256k1 = { version = "0.28", features = ["rand-std", "serde"] }
+clap = "4.3"
+regex = "1"
+hex = "0.4"
+toml = "0.8"
+config = "0.13"
+sha2 = "0.10"
+generic-array = "1.0"
+typenum = "1.17"
+
+rouille = "3.0.0"
+colored = "2.0.0"
+serde = { version = "1.0.114", features = ["derive"] }
+serde_json = "1.0"
+jsonrpc-core = "14.2.0"
+jsonrpc-http-server = "14.2.0"
+jsonrpc-derive = "14.2.1"
+rocksdb = "0.21"
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "0.2.22", features = ["full"] }
+jsonrpc-client-http = "0.5.0"
+jsonrpc-client-core = "0.5.0"
+jsonrpc-core-client = { version = "14.2.0", features = ["http"] }
