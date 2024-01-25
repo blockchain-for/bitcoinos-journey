@@ -1,0 +1,8 @@
+
+config:
+  rpc_port: 8332
+  tcp_port: 8333
+  web_port: 8080
+  data_dir: "./data"
+  miner_enabled: true
+  bootstrap_nodes: ["127.0.01:8333"]
