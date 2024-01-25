@@ -3,7 +3,10 @@ use std::{
     thread,
 };
 
-use bitcoind::settings::{self, ENV_PREFIX};
+use bitcoind::{
+    p2p,
+    settings::{self, ENV_PREFIX},
+};
 
 use colored::*;
 
@@ -12,20 +15,20 @@ fn main() -> std::io::Result<()> {
 
     println!("Settings: {config:#?}");
 
-    // let p2p_data = p2p::P2pData::new();
-    // let p2p_data_arc = Arc::new(Mutex::new(p2p_data));
+    let p2p_data = p2p::P2pData::default();
+    let p2p_data_arc = Arc::new(Mutex::new(p2p_data));
 
-    // // Broadcast blocks and transactions
-    // let (block_tx, block_rx) = mpsc::channel();
-    // let (transaction_tx, transaction_rx) = mpsc::channel();
+    // Broadcast blocks and transactions
+    let (block_tx, block_rx) = mpsc::channel();
+    let (transaction_tx, transaction_rx) = mpsc::channel();
 
-    // // Interrupt the miner when new blocks are received throught the network
+    // Interrupt the miner when new blocks are received throught the network
     // let (miner_interrupt_tx, miner_interrupt_rx) = mpsc::channel();
 
-    // let receiver_p2p_data_arc = p2p_data_arc.clone();
-    // let receiver_thread = thread::spawn(move || {
-    //     p2p::run_receiver(receiver_p2p_data_arc, block_rx, transaction_rx);
-    // });
+    let receiver_p2p_data_arc = p2p_data_arc.clone();
+    let receiver_thread = thread::spawn(move || {
+        p2p::run_receiver(receiver_p2p_data_arc, block_rx, transaction_rx);
+    });
 
     // // Start Node
     // let node = Node::(block_tx, transaction_tx);
