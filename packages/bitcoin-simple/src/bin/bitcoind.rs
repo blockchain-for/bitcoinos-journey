@@ -27,7 +27,12 @@ fn main() -> std::io::Result<()> {
 
     let receiver_p2p_data_arc = p2p_data_arc.clone();
     let receiver_thread = thread::spawn(move || {
-        p2p::run_receiver(receiver_p2p_data_arc, block_rx, transaction_rx);
+        p2p::run_receiver(
+            receiver_p2p_data_arc,
+            block_rx,
+            transaction_rx,
+            &config.config.data_dir,
+        );
     });
 
     // // Start Node
