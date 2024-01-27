@@ -40,3 +40,9 @@ pub fn get_block(db: &Store, block_hash: &str) -> Result<Option<Block>, String> 
         None => Ok(None),
     }
 }
+
+pub fn get_latest_block_hash(db: &Store) -> Result<Option<String>, String> {
+    db.get(b"latest_block_hash")
+        .map(|hash| hash.map(|b| String::from_utf8(b).unwrap()))
+        .map_err(|e| e.to_string())
+}

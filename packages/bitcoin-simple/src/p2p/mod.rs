@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 
 use colored::Colorize;
 
+use crate::block::{Block, SignedTransaction};
 use crate::node::Node;
+use crate::storage;
 
 use self::server::{P2pData, P2pServer};
 
@@ -39,15 +41,15 @@ pub fn run(
 
 pub fn run_receiver(
     p2p_data: Arc<Mutex<P2pData>>,
-    block_rx: mpsc::Receiver<()>,
-    transaction_rx: mpsc::Receiver<()>,
+    block_rx: mpsc::Receiver<Block>,
+    transaction_rx: mpsc::Receiver<SignedTransaction>,
 ) -> ResultUnit {
     let mut now = Instant::now();
 
     loop {
         // TODO: keep trying to reconnect to bootstrap nodes if they go offline
         if now.elapsed().as_secs() > 60 {
-            check_peers(p2p_data.clone())?;
+            check_and_update_peers(p2p_data.clone())?;
             now = Instant::now();
         }
 
@@ -63,12 +65,34 @@ pub fn run_receiver(
     }
 }
 
-fn publish_transaction(clone: Arc<Mutex<P2pData>>, tx: ()) -> ResultUnit {
-    todo!()
+fn publish_transaction(p2p_data: Arc<Mutex<P2pData>>, tx: SignedTransaction) -> ResultUnit {
+    publish(
+        p2p_data,
+        MESSAGE_NEW_TRANSACTION,
+        serde_json::to_string(&tx)?,
+    )
 }
 
-fn publish_block(clone: Arc<Mutex<P2pData>>, block: ()) -> ResultUnit {
-    todo!()
+fn publish_block(p2p_data: Arc<Mutex<P2pData>>, block: Block) -> ResultUnit {
+    publish(p2p_data, MESSAGE_NEW_BLOCK, serde_json::to_string(&block)?)
+}
+
+pub fn publish(p2p_data: Arc<Mutex<P2pData>>, req: &str, data: String) -> ResultUnit {
+    let p2p_data = p2p_data.lock().unwrap();
+    for peer in &p2p_data.peers {
+        if let Err(e) = send_message(peer, req.to_owned(), Some(data.clone())) {
+            println!(
+                "{}",
+                format!(
+                    "Failed to publish {} to {}, happened error: {e:?}",
+                    data, peer
+                )
+                .red()
+            );
+        }
+    }
+
+    Ok(())
 }
 
 pub fn add_peer(
@@ -76,20 +100,22 @@ pub fn add_peer(
     data: Arc<Mutex<P2pData>>,
     miner_interrupt_tx: mpsc::Sender<()>,
     addr: &str,
+    data_dir: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut data = data.lock().unwrap();
     if !data.peers.iter().any(|x| x == addr) {
-        println!("{} {}", "New Peer:".green(), addr);
+        println!("{} {} added", "New Peer:".green(), addr);
         data.peers.push(addr.to_owned());
-        check_peer_block(node, miner_interrupt_tx, addr)?;
+        check_peer_blocks(node, miner_interrupt_tx, addr, data_dir)?;
     }
-    todo!()
+
+    Ok(())
 }
 
-pub fn check_peers(data: Arc<Mutex<P2pData>>) -> ResultUnit {
+pub fn check_and_update_peers(data: Arc<Mutex<P2pData>>) -> ResultUnit {
     let mut data = data.lock().unwrap();
     data.peers.retain(|peer| {
-        if let Err(e) = send(peer, MESSAGE_PING.to_string(), None) {
+        if let Err(e) = send_message(peer, MESSAGE_PING.to_string(), None) {
             println!("Disconnected from peer: {} - {:?}", peer, e);
             false
         } else {
@@ -100,7 +126,7 @@ pub fn check_peers(data: Arc<Mutex<P2pData>>) -> ResultUnit {
     Ok(())
 }
 
-pub fn send(
+pub fn send_message(
     addr: &str,
     message: String,
     data: Option<String>,
@@ -123,10 +149,36 @@ pub fn send(
     Ok(resp)
 }
 
-pub fn check_peer_block(
+pub fn check_peer_blocks(
     node: Arc<Mutex<Node>>,
     miner_interrupt_tx: mpsc::Sender<()>,
     peer: &str,
+    data_dir: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    todo!()
+    // Get blocks from remote peer
+    let blocks_resp = send_message(peer, MESSAGE_GET_BLOCKS.to_string(), None)?;
+    let block_hashes: Vec<String> = serde_json::from_str(&blocks_resp)?;
+
+    // Get latest block hash from storage
+    let missing_hashes =
+        match storage::get_latest_block_hash(&storage::db::blocks_metadata(true, data_dir))? {
+            Some(latest_block_hash) => {
+                let position = block_hashes.iter().position(|b| *b == latest_block_hash);
+                match position {
+                    Some(position) => block_hashes[position + 1..].to_vec(),
+                    None => vec![],
+                }
+            }
+            None => block_hashes,
+        };
+
+    for block_hash in missing_hashes {
+        let block = send_message(peer, MESSAGE_GET_BLOCK.to_owned(), Some(block_hash))?;
+        let block: Block = serde_json::from_str(&block)?;
+        let mut node = node.lock().unwrap();
+        node.process_block(&block)?;
+        miner_interrupt_tx.send(())?;
+    }
+
+    Ok(())
 }

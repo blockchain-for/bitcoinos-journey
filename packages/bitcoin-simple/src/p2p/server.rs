@@ -100,13 +100,14 @@ impl P2pServer {
                 .map_err(|e| e.to_string())?;
             let caps = re.captures(msg).unwrap();
             let host = &caps["host"];
-            self.handle_new_peer(host).map_err(|e| e.to_string())
+            self.handle_new_peer(host, data_dir)
+                .map_err(|e| e.to_string())
         } else if msg.starts_with(MESSAGE_NEW_TRANSACTION) {
             let re = Regex::new(&format!(r"{}\((?P<tx>.*?)\)", MESSAGE_NEW_TRANSACTION))
                 .map_err(|e| e.to_string())?;
             let caps = re.captures(msg).unwrap();
             let tx = &caps["tx"];
-            self.handle_new_transaction(tx)
+            self.handle_new_transaction(tx, data_dir)
         } else {
             Err(String::from("Invalid MESSAGE"))
         }
@@ -143,7 +144,7 @@ impl P2pServer {
         Ok("Ok".to_string())
     }
 
-    pub fn handle_new_transaction(&mut self, tx: &str) -> Result<String, String> {
+    pub fn handle_new_transaction(&mut self, tx: &str, data_dir: &str) -> Result<String, String> {
         let tx: SignedTransaction = serde_json::from_str(tx).unwrap();
         let mut node = self.node.lock().unwrap();
         // TODO: check tx is duplicate or not
@@ -152,12 +153,17 @@ impl P2pServer {
         Ok("Ok".to_string())
     }
 
-    pub fn handle_new_peer(&mut self, peer: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn handle_new_peer(
+        &mut self,
+        peer: &str,
+        data_dir: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         add_peer(
             self.node.clone(),
             self.data.clone(),
             self.miner_interrupt_tx.clone(),
             peer,
+            data_dir,
         )?;
 
         let p2p_data = self.data.lock().unwrap();
