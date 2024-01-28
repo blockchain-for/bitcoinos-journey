@@ -22,7 +22,7 @@ pub struct P2pData {
     pub peers: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct P2pServer {
     pub node: Arc<Mutex<Node>>,
     pub data: Arc<Mutex<P2pData>>,
