@@ -8,9 +8,10 @@ use std::time::{Duration, Instant};
 
 use colored::Colorize;
 
-use crate::block::{Block, SignedTransaction};
+use crate::block::Block;
 use crate::node::Node;
 use crate::storage;
+use crate::tx::SignedTransaction;
 
 use self::server::{P2pData, P2pServer};
 
@@ -99,14 +100,14 @@ pub fn add_peer(
     node: Arc<Mutex<Node>>,
     data: Arc<Mutex<P2pData>>,
     miner_interrupt_tx: mpsc::Sender<()>,
-    addr: &str,
+    remote_peer: &str,
     data_dir: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut data = data.lock().unwrap();
-    if !data.peers.iter().any(|x| x == addr) {
-        println!("{} {} added", "New Peer:".green(), addr);
-        data.peers.push(addr.to_owned());
-        check_peer_blocks(node, miner_interrupt_tx, addr, data_dir)?;
+    if !data.peers.iter().any(|x| x == remote_peer) {
+        println!("{} {} added", "New Peer:".green(), remote_peer);
+        data.peers.push(remote_peer.to_owned());
+        check_peer_blocks(node, miner_interrupt_tx, remote_peer, data_dir)?;
     }
 
     Ok(())
@@ -180,5 +181,84 @@ pub fn check_peer_blocks(
         miner_interrupt_tx.send(())?;
     }
 
+    Ok(())
+}
+
+pub fn check_peers(data: Arc<Mutex<P2pData>>) -> ResultUnit {
+    let mut data = data.lock().unwrap();
+
+    data.peers.retain(|peer| {
+        if let Err(e) = send_message(peer, MESSAGE_PING.to_string(), None) {
+            println!("Disconnected from peer: {} - {:?}", peer, e);
+            false
+        } else {
+            true
+        }
+    });
+
+    Ok(())
+}
+
+pub fn init(
+    node: Arc<Mutex<Node>>,
+    data: Arc<Mutex<P2pData>>,
+    miner_interrupt_tx: mpsc::Sender<()>,
+    host_addr: &str,
+    bootstrap_nodes: Vec<String>,
+    data_dir: &str,
+) -> ResultUnit {
+    bootstrap_nodes.iter().for_each(|peer| {
+        if let Err(e) = init_node(
+            node.clone(),
+            data.clone(),
+            miner_interrupt_tx.clone(),
+            peer,
+            host_addr,
+            data_dir,
+        ) {
+            println!("Failed to add peer: {e}");
+        }
+    });
+
+    Ok(())
+}
+
+pub fn init_node(
+    node: Arc<Mutex<Node>>,
+    data: Arc<Mutex<P2pData>>,
+    miner_interrupt_tx: mpsc::Sender<()>,
+    remote_peer: &str,
+    host_addr: &str,
+    data_dir: &str,
+) -> ResultUnit {
+    add_peer(
+        node.clone(),
+        data.clone(),
+        miner_interrupt_tx.clone(),
+        remote_peer,
+        data_dir,
+    )?;
+
+    let resp = send_message(
+        remote_peer,
+        MESSAGE_NEW_PEER.to_string(),
+        Some(host_addr.to_string()),
+    )?;
+    let peers: Vec<String> = serde_json::from_str(&resp)?;
+
+    for peer in peers {
+        add_peer(
+            node.clone(),
+            data.clone(),
+            miner_interrupt_tx.clone(),
+            &peer,
+            data_dir,
+        )?;
+        send_message(
+            remote_peer,
+            MESSAGE_NEW_PEER.to_string(),
+            Some(host_addr.to_string()),
+        )?;
+    }
     Ok(())
 }

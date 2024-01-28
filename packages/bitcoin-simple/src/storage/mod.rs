@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{block::Block, key::PublicKey};
+use std::str::FromStr;
+
+use crate::{block::Block, crypto::key::PublicKey};
 
 pub mod db;
 

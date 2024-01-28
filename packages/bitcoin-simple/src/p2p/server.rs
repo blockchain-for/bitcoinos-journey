@@ -7,9 +7,10 @@ use std::{
 use colored::Colorize;
 use regex::Regex;
 
-use crate::block::{Block, SignedTransaction};
+use crate::block::Block;
 use crate::node::Node;
 use crate::storage;
+use crate::tx::SignedTransaction;
 
 use super::{
     add_peer, ResultUnit, MESSAGE_GET_BLOCK, MESSAGE_GET_BLOCKS, MESSAGE_NEW_BLOCK,

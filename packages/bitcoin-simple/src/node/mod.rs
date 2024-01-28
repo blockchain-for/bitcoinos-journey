@@ -1,4 +1,4 @@
-use crate::block::{Block, SignedTransaction};
+use crate::{block::Block, tx::SignedTransaction};
 
 #[derive(Debug)]
 pub struct Node {}
