@@ -25,3 +25,13 @@ pub struct ProposedBlock {
     pub prev_block: String,
     pub transactions: Vec<SignedTransaction>,
 }
+
+impl ProposedBlock {
+    pub fn serialize(&self) -> String {
+        let txs = self
+            .transactions
+            .iter()
+            .fold(String::new(), |a, b| a + &b.to_string());
+        format!("{}{}", self.prev_block, txs)
+    }
+}

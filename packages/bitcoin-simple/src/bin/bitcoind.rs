@@ -4,6 +4,7 @@ use std::{
 };
 
 use bitcoind::{
+    miner,
     node::Node,
     p2p,
     settings::{self, ENV_PREFIX},
@@ -46,16 +47,9 @@ fn main() -> std::io::Result<()> {
         );
     }
 
-    // // Start RPC
-    // let rpc_node_clone = node_arc.clone();
-    // let rpc_port = config.rpc_port.clone();
-    // let rpc_thread = thread::spawn(move|| {
-    //     rpc::run_server(rpc_node_clone, rpc_port)
-    // });
-
-    // // Start P2P
+    // Start P2P
     let p2p_node_clone = node_arc.clone();
-    let tcp_port = config.tcp_port.clone();
+    let tcp_port = config.tcp_port;
     let server_p2p_data_clone = p2p_data_arc.clone();
     let host_addr = format!("{}:{}", config.host_ip, tcp_port);
     let run_server_host_addr = host_addr.clone();
@@ -74,13 +68,15 @@ fn main() -> std::io::Result<()> {
     });
 
     // Start Miner
-    // let p2p_node_miner = node_arc.clone();
-    // let miner_thread = if config.miner_enabled {
-    //     let miner_node_clone = node_arc.clone();
-    //     Some(thread::spawn(move || {
-    //         miner::start_miner(miner_node_clone, miner_interrupt_rx)
-    //     }))
-    // } else { None };
+    let p2p_node_miner = node_arc.clone();
+    let miner_thread = if config.miner_enabled {
+        let miner_node_clone = p2p_node_miner;
+        Some(thread::spawn(move || {
+            miner::start_miner(miner_node_clone, miner_interrupt_rx)
+        }))
+    } else {
+        None
+    };
 
     // Init p2p
     let p2p_node_clone = node_arc.clone();
@@ -97,6 +93,13 @@ fn main() -> std::io::Result<()> {
     )
     .unwrap();
 
+    // // Start RPC
+    // let rpc_node_clone = node_arc.clone();
+    // let rpc_port = config.rpc_port.clone();
+    // let rpc_thread = thread::spawn(move|| {
+    //     rpc::run_server(rpc_node_clone, rpc_port)
+    // });
+
     // // Web
     // let web_port = config.web_port.clone();
     // let web_thread = thread::spawn(move || {
@@ -107,9 +110,9 @@ fn main() -> std::io::Result<()> {
     receiver_thread.join().unwrap();
     // rpc_thread.join().unwrap();
     p2p_thread.join().unwrap();
-    // if let Some(t) = miner_thread {
-    //     t.join().unwrap();
-    // }
+    if let Some(t) = miner_thread {
+        t.join().unwrap();
+    }
     // web_thread.join().unwrap();
 
     Ok(())

@@ -95,6 +95,13 @@ impl Node {
         Ok(())
     }
 
+    pub fn receive_block(&mut self, block: &Block) -> Result<(), String> {
+        self.process_block(block)?;
+        self.block_tx.send(block.clone()).unwrap();
+
+        Ok(())
+    }
+
     pub fn create_coinbase_tx(&self) -> Result<SignedTransaction, String> {
         let latest_block_number = storage::get_latest_block_number(&self.db_blocks_metadata)?;
         let reward = self.get_block_reward(latest_block_number + 1);

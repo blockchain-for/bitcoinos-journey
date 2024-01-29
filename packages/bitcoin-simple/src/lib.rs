@@ -1,5 +1,6 @@
 pub mod block;
 pub mod crypto;
+pub mod miner;
 pub mod node;
 pub mod p2p;
 pub mod settings;
