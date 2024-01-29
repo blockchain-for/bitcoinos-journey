@@ -1,11 +1,14 @@
-use std::sync::mpsc;
+use std::{fs, path::Path, sync::mpsc};
 
 use crate::{
     block::Block,
     crypto::{self, KeyPair},
+    settings::Settings,
     storage::{self, Store},
     tx::SignedTransaction,
 };
+
+use std::str::FromStr;
 
 // TODO: Difficulty adjustment
 pub static DIFFICULTY: usize = 2;
@@ -24,6 +27,26 @@ pub struct Node {
 }
 
 impl Node {
+    pub fn new(
+        block_tx: mpsc::Sender<Block>,
+        transaction_tx: mpsc::Sender<SignedTransaction>,
+        settings: Settings,
+    ) -> Self {
+        let data_dir = settings.config.data_dir;
+        fs::create_dir_all(&data_dir).expect("Can't create data directory");
+
+        Self {
+            keypair: get_keypair(&data_dir).expect("Can't get keypair"),
+            mempool: vec![],
+            db_blocks: storage::db::blocks(false, &data_dir),
+            db_blocks_metadata: storage::db::blocks_metadata(false, &data_dir),
+            db_balances: storage::db::balances(false, &data_dir),
+
+            block_tx,
+            transaction_tx,
+        }
+    }
+
     pub fn process_block(&mut self, block: &Block) -> Result<(), String> {
         self.verify_block(block)?;
         self.process_block_transactions(block)?;
@@ -97,10 +120,56 @@ impl Node {
         tx: &SignedTransaction,
         block_number: u32,
     ) -> Result<(), String> {
-        todo!()
+        self.verify_tx(tx)?;
+        if tx.transaction.amount != self.get_latest_reward(block_number) {
+            return Err("Transaction verification failed: Coinbase Amount mismatch".to_string());
+        }
+
+        Ok(())
     }
 
     pub fn verify_reg_tx(&self, tx: &SignedTransaction) -> Result<(), String> {
-        todo!()
+        self.verify_tx(tx)?;
+        let from_balance =
+            storage::get_balance(&self.db_balances, tx.transaction.from)?.unwrap_or_default();
+        if from_balance < tx.transaction.amount {
+            return Err("Transaction verification failed: Insufficient balance".to_string());
+        }
+
+        Ok(())
     }
+
+    pub fn verify_tx(&self, tx: &SignedTransaction) -> Result<(), String> {
+        if !tx.is_sig_valid() {
+            return Err("Transaction verification failed: Invalid signature".to_string());
+        }
+
+        Ok(())
+    }
+
+    pub fn get_latest_reward(&self, block_number: u32) -> u32 {
+        let halving = block_number / 1024;
+        if halving > 10 {
+            return 0;
+        }
+
+        512 >> halving
+    }
+}
+
+pub fn get_keypair(data_dir: &str) -> Result<KeyPair, Box<dyn std::error::Error>> {
+    let wallet_path = format!("{}/wallet", data_dir);
+    if Path::new(&wallet_path).exists() {
+        let key = fs::read_to_string(wallet_path)?;
+
+        return Ok(KeyPair::from(key)?);
+    }
+
+    let keypair = KeyPair::new();
+    fs::write(
+        &wallet_path,
+        keypair.private_key.display_secret().to_string(),
+    )?;
+
+    Ok(keypair)
 }
