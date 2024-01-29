@@ -30,17 +30,16 @@ impl Node {
     pub fn new(
         block_tx: mpsc::Sender<Block>,
         transaction_tx: mpsc::Sender<SignedTransaction>,
-        settings: Settings,
+        data_dir: &str,
     ) -> Self {
-        let data_dir = settings.config.data_dir;
-        fs::create_dir_all(&data_dir).expect("Can't create data directory");
+        fs::create_dir_all(data_dir).expect("Can't create data directory");
 
         Self {
-            keypair: get_keypair(&data_dir).expect("Can't get keypair"),
+            keypair: get_keypair(data_dir).expect("Can't get keypair"),
             mempool: HashMap::new(),
-            db_blocks: storage::db::blocks(false, &data_dir),
-            db_blocks_metadata: storage::db::blocks_metadata(false, &data_dir),
-            db_balances: storage::db::balances(false, &data_dir),
+            db_blocks: storage::db::blocks(false, data_dir),
+            db_blocks_metadata: storage::db::blocks_metadata(false, data_dir),
+            db_balances: storage::db::balances(false, data_dir),
 
             block_tx,
             transaction_tx,
@@ -198,7 +197,7 @@ impl Node {
         block.unwrap_or(self.make_gensis_block())
     }
 
-    pub fn start(&self) -> Result<Option<Block>, String> {
+    pub fn start(&mut self) -> Result<Option<Block>, String> {
         self.get_latest_block()
     }
 

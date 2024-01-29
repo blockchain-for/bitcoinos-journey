@@ -14,6 +14,7 @@ pub struct Settings {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ConfigInfo {
+    pub host_ip: String,
     pub rpc_port: u32,
     pub tcp_port: u32,
     pub web_port: u32,

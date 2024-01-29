@@ -1,5 +1,6 @@
 
 config:
+  host_ip: "127.0.0.1"
   rpc_port: 8332
   tcp_port: 8333
   web_port: 8080
