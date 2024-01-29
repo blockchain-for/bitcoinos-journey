@@ -149,7 +149,7 @@ impl P2pServer {
         let tx: SignedTransaction = serde_json::from_str(tx).unwrap();
         let mut node = self.node.lock().unwrap();
         // TODO: check tx is duplicate or not
-        node.add_transaction(&tx)?;
+        node.add_tx_to_mempool(&tx)?;
 
         Ok("Ok".to_string())
     }

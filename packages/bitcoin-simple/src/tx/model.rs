@@ -6,11 +6,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::crypto;
 
-#[derive(Clone, Copy, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Transaction {
+    pub tx_id: String,
     pub from: PublicKey,
     pub to: PublicKey,
     pub amount: u32,
+    pub created_at: u64,
 }
 
 impl Debug for Transaction {
@@ -25,16 +27,21 @@ impl Debug for Transaction {
 
 impl Transaction {
     pub fn serialize(&self) -> String {
-        format!(
-            "{}{}{}",
-            self.from,
-            self.to,
-            hex::encode(format!("{}", self.amount))
-        )
+        Self::generate_tx_id(self.from, self.to, self.amount, self.created_at)
     }
 
     pub fn hash(&self) -> Vec<u8> {
         crypto::sha256(self.serialize())
+    }
+
+    pub fn generate_tx_id(from: PublicKey, to: PublicKey, amount: u32, created_at: u64) -> String {
+        format!(
+            "{}{}{}{}",
+            from,
+            to,
+            hex::encode(format!("{}", amount)),
+            hex::encode(format!("{}", created_at)),
+        )
     }
 }
 
@@ -58,5 +65,9 @@ impl SignedTransaction {
         let sig = Signature::from_str(self.sig.as_str()).expect("Signature must valid");
         secp.verify_ecdsa(&unsigned_tx_hash, &sig, &self.transaction.from)
             .is_ok()
+    }
+
+    pub fn tx_id(&self) -> String {
+        self.transaction.tx_id.clone()
     }
 }
