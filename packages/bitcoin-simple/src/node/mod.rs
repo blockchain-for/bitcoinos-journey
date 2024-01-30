@@ -5,7 +5,6 @@ use colored::Colorize;
 use crate::{
     block::{Block, ProposedBlock},
     crypto::{self, key::PublicKey, KeyPair},
-    settings::Settings,
     storage::{self, Store},
     tx::{self, create_signed, SignedTransaction},
 };

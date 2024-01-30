@@ -6,4 +6,4 @@ config:
   web_port: 8080
   data_dir: "./data"
   miner_enabled: true
-  bootstrap_nodes: ["127.0.01:8333"]
+  bootstrap_nodes: ["127.0.0.1:8333"]

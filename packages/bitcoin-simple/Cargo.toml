@@ -17,16 +17,16 @@ sha2 = "0.10"
 generic-array = "1.0"
 typenum = "1.17"
 
-rouille = "3.0.0"
-colored = "2.0.0"
-serde = { version = "1.0.114", features = ["derive"] }
+rouille = "3"
+colored = "2"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
-jsonrpc-core = "14.2.0"
-jsonrpc-http-server = "14.2.0"
-jsonrpc-derive = "14.2.1"
+jsonrpc-core = "18.0"
+jsonrpc-http-server = "18.0"
+jsonrpc-derive = "18"
 rocksdb = "0.21"
 reqwest = { version = "0.11", features = ["json"] }
-tokio = { version = "0.2.22", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 jsonrpc-client-http = "0.5.0"
 jsonrpc-client-core = "0.5.0"
-jsonrpc-core-client = { version = "14.2.0", features = ["http"] }
+jsonrpc-core-client = { version = "18.0", features = ["http"] }

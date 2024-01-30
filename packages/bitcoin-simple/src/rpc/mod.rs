@@ -13,7 +13,7 @@ use jsonrpc_derive::rpc;
 
 use crate::{block::Block, crypto, tx::SignedTransaction};
 
-#[rpc(server, client)]
+#[rpc]
 pub trait Rpc {
     #[rpc(name = "protocolVersion")]
     fn protocol_version(&self) -> Result<String>;
@@ -56,5 +56,7 @@ pub fn run_server(node: Arc<Mutex<Node>>, host: String, port: u32) -> ResultUnit
 
     println!("{} Listening on {:?}:{:?}\n", "RPC".green(), host, rpc_path);
 
-    Ok(server.wait())
+    server.wait();
+
+    Ok(())
 }
