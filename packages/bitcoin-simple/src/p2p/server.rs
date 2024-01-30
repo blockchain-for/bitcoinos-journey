@@ -108,7 +108,7 @@ impl P2pServer {
                 .map_err(|e| e.to_string())?;
             let caps = re.captures(msg).unwrap();
             let tx = &caps["tx"];
-            self.handle_new_transaction(tx, data_dir)
+            self.handle_new_transaction(tx)
         } else {
             Err(String::from("Invalid MESSAGE"))
         }
@@ -145,7 +145,7 @@ impl P2pServer {
         Ok("Ok".to_string())
     }
 
-    pub fn handle_new_transaction(&mut self, tx: &str, data_dir: &str) -> Result<String, String> {
+    pub fn handle_new_transaction(&mut self, tx: &str) -> Result<String, String> {
         let tx: SignedTransaction = serde_json::from_str(tx).unwrap();
         let mut node = self.node.lock().unwrap();
         // TODO: check tx is duplicate or not

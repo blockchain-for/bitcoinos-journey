@@ -21,6 +21,7 @@ pub struct Node {
     pub db_blocks: Store,
     pub db_blocks_metadata: Store,
     pub db_balances: Store,
+    pub data_dir: String,
 
     block_tx: mpsc::Sender<Block>,
     transaction_tx: mpsc::Sender<SignedTransaction>,
@@ -40,6 +41,7 @@ impl Node {
             db_blocks: storage::db::blocks(false, data_dir),
             db_blocks_metadata: storage::db::blocks_metadata(false, data_dir),
             db_balances: storage::db::balances(false, data_dir),
+            data_dir: data_dir.to_string(),
 
             block_tx,
             transaction_tx,

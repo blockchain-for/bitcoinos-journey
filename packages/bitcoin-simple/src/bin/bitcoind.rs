@@ -6,7 +6,7 @@ use std::{
 use bitcoind::{
     miner,
     node::Node,
-    p2p,
+    p2p, rpc,
     settings::{self, ENV_PREFIX},
 };
 
@@ -93,12 +93,12 @@ fn main() -> std::io::Result<()> {
     )
     .unwrap();
 
-    // // Start RPC
-    // let rpc_node_clone = node_arc.clone();
-    // let rpc_port = config.rpc_port.clone();
-    // let rpc_thread = thread::spawn(move|| {
-    //     rpc::run_server(rpc_node_clone, rpc_port)
-    // });
+    // Start RPC
+    let rpc_node_clone = node_arc.clone();
+    let rpc_port = config.rpc_port;
+    let rpc_thread = thread::spawn(move || {
+        rpc::run_server(rpc_node_clone, host_addr, rpc_port).unwrap();
+    });
 
     // // Web
     // let web_port = config.web_port.clone();
@@ -108,7 +108,7 @@ fn main() -> std::io::Result<()> {
 
     // // Join threads
     receiver_thread.join().unwrap();
-    // rpc_thread.join().unwrap();
+    rpc_thread.join().unwrap();
     p2p_thread.join().unwrap();
     if let Some(t) = miner_thread {
         t.join().unwrap();

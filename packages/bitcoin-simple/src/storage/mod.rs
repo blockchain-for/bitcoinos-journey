@@ -8,6 +8,12 @@ pub mod db;
 
 pub type Store = rocksdb::DB;
 
+pub fn get_block_hash(db: &Store, block_number: u32) -> Result<Option<String>, String> {
+    db.get(block_number.to_string())
+        .map_err(|e| e.to_string())
+        .map(|bo| bo.and_then(|b| String::from_utf8(b).map_err(|e| e.to_string()).ok()))
+}
+
 pub fn get_block_hashes(db: &Store) -> Result<Vec<String>, String> {
     let mut blocks = Vec::new();
     let mut iter = db.raw_iterator();
