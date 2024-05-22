@@ -68,7 +68,7 @@ fn main() {
         .expect("Must be a valid sighash");
 
     let msg = Message::from(sighash);
-    let sig = secp.sign_ecdsa(&msg, &sk);
+    let signature = secp.sign_ecdsa(&msg, &sk);
 
     // Convert into a transaction
     let mut tx = signhash_cache.into_transaction();
@@ -77,8 +77,8 @@ fn main() {
     let pk = sk.public_key(&secp);
     let witness = &mut tx.input[0].witness;
     witness.push_ecdsa_signature(&ecdsa::Signature {
-        sig,
-        hash_ty: EcdsaSighashType::All,
+        signature,
+        sighash_type: EcdsaSighashType::All,
     });
 
     witness.push(pk.serialize());

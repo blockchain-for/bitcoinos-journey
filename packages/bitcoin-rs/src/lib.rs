@@ -1,3 +1,6 @@
+
+pub mod p2wpkh;
+
 use std::str::FromStr;
 
 use bitcoin::{

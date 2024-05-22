@@ -5,24 +5,41 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+
 [dependencies]
-amplify = "4.0.0"
-aluvm = "0.10"
-bp-core = "0.10"
-rgb-std = { version = "0.10", features = ["serde", "fs"] }
-rgb-wallet = { version = "0.10.4" }
-rgb-schemata = { version = "0.10.0-rc.3" }
-rgb-contracts = { version = "0.10.0-rc.3", default-features = false }
-serde = "1.0"
-serde_json = "1.0"
-serde-encrypt = "0.7.0"
-strict_encoding = "2.5"
-strict_types = "1.6"
-thiserror = "1.0"
-sha2 = "0.10"
+# amplify = "4.0.0"
+# aluvm = "0.10"
+# bp-core = "0.10"
+# rgb-std = { version = "0.10", features = ["serde", "fs"] }
+# rgb-wallet = { version = "0.10.4" }
+# rgb-schemata = { version = "0.10.0-rc.3" }
+# rgb-contracts = { version = "0.10.0-rc.3", default-features = false }
+# serde = "1.0"
+# serde_json = "1.0"
+# serde-encrypt = "0.7.0"
+# strict_encoding = "2.5"
+# strict_types = "1.6"
+# thiserror = "1.0"
+# sha2 = "0.10"
+
+amplify = { workspace = true }
+strict_encoding = { workspace = true }
+strict_types = { workspace = true }
+aluvm = { workspace = true }
+bp-core = { workspace = true }
+rgb-std = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
+[patch.crates-io]
+rgb-core = { git = "https://github.com/RGB-WG/rgb-core", branch = "master" }
+rgb-std = { git = "https://github.com/RGB-WG/rgb-std", branch = "0.11" }
 
 [dev-dependencies]
 chrono = "0.4"
+serde_yaml = "0.9.27"
 
 [features]
 all=[]
