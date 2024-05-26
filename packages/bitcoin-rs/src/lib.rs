@@ -1,5 +1,5 @@
-
 pub mod p2wpkh;
+pub mod p2wsh_multisig_22;
 
 use std::str::FromStr;
 
