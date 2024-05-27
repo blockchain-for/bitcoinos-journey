@@ -43,22 +43,22 @@ pub fn verify_signature(mut raw_tx: &[u8], input_idx: usize, value: u64) {
 
         // Here we assume that all sighash_flags are the same. Can they be different?
         let sighash = cache
-            .segwit_signature_hash(
+            .p2wsh_signature_hash(
                 input_idx,
                 witness_script,
                 Amount::from_sat(value),
-                sig.hash_ty,
+                sig.sighash_type,
             )
             .expect("Failed to compute sighash");
 
-        println!("Segwit p2wsh sighash: {:x} ({})", sighash, sig.hash_ty);
+        println!("Segwit p2wsh sighash: {:x} ({})", sighash, sig.sighash_type);
 
-        let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..]).unwrap();
+        let msg = bitcoin::secp256k1::Message::from_digest_slice(&sighash[..]).unwrap();
 
         for pk in &pubkey_vec {
             let secp = bitcoin::secp256k1::Secp256k1::new();
 
-            match secp.verify_ecdsa(&msg, &sig.sig, &pk.inner) {
+            match secp.verify_ecdsa(&msg, &sig.signature, &pk.inner) {
                 Ok(_) => {
                     sig_verified_cnt += 1;
                     println!("Verified signature with PubKey {}", pk);
@@ -89,6 +89,10 @@ pub fn verify_signature(mut raw_tx: &[u8], input_idx: usize, value: u64) {
 /// * `script_pubkey` - p2wsh multisig scriptPubKey
 fn decode_script_pubkey(script_pubkey: &bitcoin::Script) -> (usize, Vec<bitcoin::PublicKey>) {
     println!("ScriptePubKey: {:?}", script_pubkey);
+    println!(
+        "Instructions len: {:?}",
+        script_pubkey.instructions().count()
+    );
 
     let mut pubkey_vec = vec![];
     let mut pubkey_cnt = 0;
@@ -97,11 +101,13 @@ fn decode_script_pubkey(script_pubkey: &bitcoin::Script) -> (usize, Vec<bitcoin:
     for (k, instr) in script_pubkey.instructions().enumerate() {
         match instr.unwrap() {
             Instruction::PushBytes(pb) => {
+                println!("The index {k} is PushBytes: {pb:?}");
                 assert!(k > 0);
                 let pk = bitcoin::PublicKey::from_slice(pb.as_bytes()).unwrap();
                 pubkey_vec.push(pk);
             }
             Instruction::Op(op) => {
+                println!("The index {k} is Op: {op:?}");
                 if k == 0 {
                     required_sig_cnt =
                         match op.classify(bitcoin::blockdata::opcodes::ClassifyContext::Legacy) {

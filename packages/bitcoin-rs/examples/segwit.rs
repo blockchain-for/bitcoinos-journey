@@ -77,8 +77,8 @@ fn main() {
     let pk = sk.public_key(&secp);
     let witness = &mut tx.input[0].witness;
     witness.push_ecdsa_signature(&ecdsa::Signature {
-        sig: signature,
-        hash_ty: EcdsaSighashType::All,
+        signature,
+        sighash_type: EcdsaSighashType::All,
     });
 
     witness.push(pk.serialize());

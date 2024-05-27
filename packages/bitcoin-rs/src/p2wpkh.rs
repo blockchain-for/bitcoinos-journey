@@ -33,15 +33,16 @@ pub fn verify_signature(mut raw_tx: &[u8], input_idx: usize, value: u64) {
     println!("Script pubkey hash: {wpkh:x}");
 
     let spk = bitcoin::ScriptBuf::new_p2wpkh(&wpkh);
-    let script_code = spk.p2wpkh_script_code().expect("Failed to get script code");
+    // let script_code = spk.p2wpkh_script_code().expect("Failed to get script code");
 
     let mut cache = bitcoin::sighash::SighashCache::new(&tx);
     let sighash = cache
-        .segwit_signature_hash(
+        .p2wpkh_signature_hash(
             input_idx,
-            &script_code,
+            // &script_code,
+            &spk,
             Amount::from_sat(value),
-            signature.hash_ty,
+            signature.sighash_type,
         )
         .expect("Failed to compute sighash");
 
@@ -52,5 +53,6 @@ pub fn verify_signature(mut raw_tx: &[u8], input_idx: usize, value: u64) {
     println!("Message is: {msg:x}");
 
     let secp = bitcoin::secp256k1::Secp256k1::new();
-    secp.verify_ecdsa(&msg, &signature.sig, &pk.inner).unwrap();
+    secp.verify_ecdsa(&msg, &signature.signature, &pk.inner)
+        .unwrap();
 }
