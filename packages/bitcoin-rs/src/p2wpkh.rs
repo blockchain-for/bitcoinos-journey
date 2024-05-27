@@ -1,3 +1,5 @@
+//! from: https://github.com/panicfarm/multisig-test/blob/master/examples/sighash.rs
+//!
 use bitcoin::Amount;
 
 /// Computes SegWit sighash for a transaction input that spends a p2wpkh output with "witness_v0_keyhash" scriptPubKey.type
