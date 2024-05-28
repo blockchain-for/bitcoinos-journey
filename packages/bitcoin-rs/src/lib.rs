@@ -1,5 +1,4 @@
-pub mod p2sh_multisig_22;
-pub mod p2sm_multisig_23;
+pub mod legacy_multisig;
 pub mod p2wpkh;
 pub mod p2wsh_multisig_22;
 

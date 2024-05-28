@@ -1,4 +1,4 @@
-use bitcoin_rs::p2sh_multisig_22;
+use bitcoin_rs::legacy_multisig;
 use hex_lit::hex;
 
 fn main() {
@@ -12,5 +12,5 @@ fn main() {
     let input_idx = 0;
 
     println!("\nsighash_p2sh_multisig_2x2:");
-    p2sh_multisig_22::verify_signature_legacy(&raw_tx, input_idx, None);
+    legacy_multisig::verify_signature_legacy(&raw_tx, input_idx, None);
 }
