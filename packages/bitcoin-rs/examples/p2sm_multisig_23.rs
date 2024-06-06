@@ -1,4 +1,3 @@
-
 use bitcoin_rs::legacy_multisig;
 use hex_lit::hex;
 

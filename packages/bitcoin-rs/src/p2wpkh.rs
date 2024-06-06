@@ -10,14 +10,13 @@ use bitcoin::Amount;
 /// * `inp_idx` - spending tx input index
 /// * `value` - ref tx output value in sats
 pub fn verify_signature(mut raw_tx: &[u8], input_idx: usize, value: u64) {
-
     // Step 1: Decode the transaction from raw bytes
     let tx: bitcoin::Transaction =
         bitcoin::consensus::Decodable::consensus_decode(&mut raw_tx).unwrap();
 
     // Step 2: Get the input from the transaction with the given index
     let input = &tx.input[input_idx];
-    
+
     // Step 3: Get the witness from TxIn
     let witness = &input.witness;
     println!("Witness: {:?}", witness);

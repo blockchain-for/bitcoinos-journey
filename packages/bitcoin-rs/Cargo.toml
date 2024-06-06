@@ -9,6 +9,7 @@ edition = "2021"
 bitcoin = { version = "0.32", features = ["std", "rand-std"] }
 bitcoin-internals = "0.3"
 hex_lit = "0.1"
+hex-literal = "0.4"
 hex = "0.4"
 bitcoin_hashes = { version = "0.14", default-features = false }
 miniscript = "12.0"

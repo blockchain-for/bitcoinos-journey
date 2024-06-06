@@ -2,6 +2,10 @@ pub mod legacy_multisig;
 pub mod p2wpkh;
 pub mod p2wsh_multisig_22;
 
+pub mod tx;
+pub mod varint;
+pub mod version;
+
 use std::str::FromStr;
 
 use bitcoin::{
