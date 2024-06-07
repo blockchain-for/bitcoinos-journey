@@ -238,18 +238,129 @@ impl StandardScripts {
     }
 
     /// Parse as P2WSH
+    /// A P2WSH scriptPubKey looks like:
+    /// ASM: OP_0 OP_PUSHBYTES_32 <pubkey hash hex>
+    /// e.g. : OP_0 OP_PUSHBYTES_32 65f91a53cb7120057db3d378bd0f7d944167d43a7dcbff15d6afc4823f1d3ed3
+    /// Hex: 002065f91a53cb7120057db3d378bd0f7d944167d43a7dcbff15d6afc4823f1d3ed3
+    /// in Transaction: 46ebe264b0115a439732554b2b390b11b332b5b5692958b1754aa0ee57b64265 (Output 1)
     pub fn parse_p2wsh(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
-        todo!()
+        // Already parse the first opcode as OP_0 and the second opcode as OP_PUSHBYTES_32
+        // Parse next 32 bytes
+        let mut hash_bytes = [0u8; 32];
+        bytes.read_exact(&mut hash_bytes)?;
+
+        let mut script_builder = ScriptBuilder::new();
+        script_builder
+            .push_opcode(Opcode::OP_0)?
+            .push_opcode(Opcode::PushBytes(32))?
+            .push_bytes(&hash_bytes)?;
+
+        Ok(script_builder.build())
     }
 
     /// Parse as P2TR
     pub fn parse_p2tr(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
-        todo!()
+        // Already parse the first opcode as OP_1 and the second opcode as OP_PUSHBYTES_32
+        // Parse next 32 bytes
+        let mut hash_bytes = [0u8; 32];
+        bytes.read_exact(&mut hash_bytes)?;
+
+        let mut script_builder = ScriptBuilder::new();
+        script_builder
+            .push_opcode(Opcode::Num(1))?
+            .push_opcode(Opcode::PushBytes(32))?
+            .push_bytes(&hash_bytes)?;
+
+        Ok(script_builder.build())
     }
 
     /// Parse as P2MS
+    /// Also checks to see if the number of public keys parsed is equal to number of public keys requires
+    /// or if the parsed public keys  are less than the threshold
+    /// A P2MS scriptPubKey looks like:
+    /// ASM: OP_2 OP_PUSHBYTES_65 <pubkey1 hash hex> OP_PUSHBYTES_65 <pubkey2 hash hex> OP_PUSHBYTES_65 <pubkey3 hash hex> OP_3 OP_CHECKMULTISIG
+    /// e.g. : OP_2 OP_PUSHBYTES_65 04d81fd577272bbe73308c93009eec5dc9fc319fc1ee2e7066e17220a5d47a18314578be2faea34b9f1f8ca078f8621acd4bc22897b03daa422b9bf56646b342a2 \
+    /// OP_PUSHBYTES_65 04ec3afff0b2b66e8152e9018fe3be3fc92b30bf886b3487a525997d00fd9da2d012dce5d5275854adc3106572a5d1e12d4211b228429f5a7b2f7ba92eb0475bb1 \
+    /// OP_PUSHBYTES_65 04b49b496684b02855bc32f5daefa2e2e406db4418f3b86bca5195600951c7d918cdbe5e6d3736ec2abf2dd7610995c3086976b2c0c7b4e459d10b34a316d5a5e7 \
+    /// OP_3 OP_CHECKMULTISIG
+    /// Hex: 524104d81fd577272bbe73308c93009eec5dc9fc319fc1ee2e7066e17220a5d47a18314578be2faea34b9f1f8ca078f8621acd4bc22897b03daa422b9bf56646b342a24104ec3afff0b2b66e8152e9018fe3be3fc92b30bf886b3487a525997d00fd9da2d012dce5d5275854adc3106572a5d1e12d4211b228429f5a7b2f7ba92eb0475bb14104b49b496684b02855bc32f5daefa2e2e406db4418f3b86bca5195600951c7d918cdbe5e6d3736ec2abf2dd7610995c3086976b2c0c7b4e459d10b34a316d5a5e753ae
     pub fn parse_p2ms(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
-        todo!()
+        let mut opcode_buf = [0u8; 1];
+        bytes.read_exact(&mut opcode_buf)?;
+
+        let threshold_opcode = Opcode::from_byte(opcode_buf[0]);
+
+        match threshold_opcode {
+            Opcode::Num(_) | Opcode::OP_1 => {
+                let mut script_builder = ScriptBuilder::new();
+                script_builder.push_opcode(threshold_opcode)?;
+
+                // The number of public keys parsed
+                let mut pubkey_count = 0u8;
+                // the number of public keys specified in the scriptSig
+                let parsed_pubkey_count: u8;
+                let mut pushbytes_buf: Vec<u8> = Vec::new();
+
+                loop {
+                    bytes.read_exact(&mut opcode_buf)?;
+                    let current_opcode = Opcode::from_byte(opcode_buf[0]);
+
+                    match current_opcode {
+                        Opcode::Num(v) => {
+                            parsed_pubkey_count = v;
+                            script_builder.push_opcode(current_opcode)?;
+
+                            // Break the loop if a `OP_1 to OP_16` is encountered
+                            break;
+                        }
+                        Opcode::PushBytes(v) => {
+                            let new_position = bytes.position() as usize + v as usize;
+                            let read_bytes =
+                                &bytes.get_ref()[bytes.position() as usize..new_position];
+
+                            pushbytes_buf.extend_from_slice(read_bytes);
+
+                            script_builder
+                                .push_opcode(current_opcode)?
+                                .push_bytes(&pushbytes_buf)?;
+
+                            pushbytes_buf.clear();
+                            bytes.set_position(new_position as u64);
+                            pubkey_count += 1;
+                        }
+                        _ => {
+                            return to_io_error(
+                                "invalid Script. Expected a PUSHBYTES_* or OP_1 to OP_16",
+                            );
+                        }
+                    }
+                }
+
+                if pubkey_count.ne(&parsed_pubkey_count) {
+                    return to_io_error("Invalid Script. The number of public keys for multisignagure is less than or greater than the script requirements.");
+                }
+
+                if let Opcode::Num(threshold_inner) = threshold_opcode {
+                    if parsed_pubkey_count.lt(&threshold_inner) {
+                        return to_io_error("Invalid script, the number of public keys for multisignagure is less than the threshold.");
+                    }
+                }
+
+                // Parse next byte and check if it is OP_CHECKMULTISIG opcode
+                bytes.read_exact(&mut opcode_buf)?;
+
+                let opcheck_multisig = Opcode::from_byte(opcode_buf[0]);
+
+                if opcheck_multisig.ne(&Opcode::OP_CHECKMULTISIG) {
+                    return to_io_error("Invalid Script. OP_CHECKMULTISIG opcode should be next ");
+                }
+
+                script_builder.push_opcode(Opcode::OP_CHECKMULTISIG)?;
+
+                Ok(script_builder.build())
+            }
+            _ => to_io_error("Invalid script."),
+        }
     }
 }
 
@@ -351,7 +462,7 @@ impl TryFrom<Opcode> for String {
                 return Ok(String::from("OP_PUSHBYTES_").add(v.to_string().as_str()))
             }
             Opcode::OP_1 => "OP_1",
-            Opcode::Num(num) => return Ok(String::from("OP_{}").add(num.to_string().as_str())),
+            Opcode::Num(num) => return Ok(String::from("OP_").add(num.to_string().as_str())),
             Opcode::OP_RETURN => "OP_RETURN",
             Opcode::OP_DUP => "OP_DUP",
             Opcode::OP_EQUAL => "OP_EQUAL",
@@ -478,6 +589,52 @@ mod tests {
         let p2wpkh_bytes = hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6");
         let mut p2wpkh = Cursor::new(p2wpkh_bytes.as_ref());
         let outcome = StandardScripts::parse(&mut p2wpkh);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2wsh_should_works() {
+        let p2wsh_bytes =
+            hex!("002065f91a53cb7120057db3d378bd0f7d944167d43a7dcbff15d6afc4823f1d3ed3");
+        let mut p2wsh = Cursor::new(p2wsh_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2wsh);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2tr_should_work() {
+        let p2tr_bytes =
+            hex!("51200000000000000000000000000000000000000000000000000000000000000000");
+        let mut p2tr = Cursor::new(p2tr_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2tr);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2ms_2x3_should_work() {
+        let p2ms_bytes = hex!("524104d81fd577272bbe73308c93009eec5dc9fc319fc1ee2e7066e17220a5d47a18314578be2faea34b9f1f8ca078f8621acd4bc22897b03daa422b9bf56646b342a24104ec3afff0b2b66e8152e9018fe3be3fc92b30bf886b3487a525997d00fd9da2d012dce5d5275854adc3106572a5d1e12d4211b228429f5a7b2f7ba92eb0475bb14104b49b496684b02855bc32f5daefa2e2e406db4418f3b86bca5195600951c7d918cdbe5e6d3736ec2abf2dd7610995c3086976b2c0c7b4e459d10b34a316d5a5e753ae");
+        let mut p2ms_cursor = Cursor::new(p2ms_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2ms_cursor);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2ms_1x2_should_work() {
+        let p2ms_2_bytes = hex!("51210000000000000000000000000000000000000000000000000000000000000000002100000000000000000000000000000000000000000000000000000000000000000052ae");
+        let mut p2ms_2 = Cursor::new(p2ms_2_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2ms_2);
 
         assert!(outcome.is_ok());
 
