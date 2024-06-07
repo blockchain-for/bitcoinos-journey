@@ -35,7 +35,7 @@ impl StandardScripts {
                 } else if second_opcode.eq(&Opcode::PushBytes(32)) {
                     Self::parse_p2wsh(bytes)
                 } else {
-                    return Self::to_io_error(
+                    return to_io_error(
                         "Invalid Script. Expected OP_PUSHBYTES_20 or OP_PUSHBYTES_32 after OP_0",
                     );
                 }
@@ -75,7 +75,7 @@ impl StandardScripts {
         let op_checksig = Opcode::from_byte(op_checksig_byte[0]);
 
         if op_checksig.ne(&Opcode::OP_CHECKSIG) {
-            return Self::to_io_error("Invalid Data. Expected OP_CHECKSIG as last byte of script.");
+            return to_io_error("Invalid Data. Expected OP_CHECKSIG as last byte of script.");
         }
 
         // Lastly build the p2pk script
@@ -102,7 +102,7 @@ impl StandardScripts {
         let should_be_op_hash160 = Opcode::from_byte(opcode_buf[0]);
 
         if should_be_op_hash160.ne(&Opcode::OP_HASH160) {
-            return Self::to_io_error(
+            return to_io_error(
                 "Invalid data. Expected OP_HASH160 as second opcode after OP_DUP of the script",
             );
         }
@@ -113,7 +113,7 @@ impl StandardScripts {
         let should_be_op_pushbytes_20 = Opcode::from_byte(opcode_buf[0]);
 
         if should_be_op_pushbytes_20.ne(&Opcode::PushBytes(20)) {
-            return Self::to_io_error(
+            return to_io_error(
                 "Invalid data. Expected OP_PUSHBYTES_20 as third opcode after OP_HASH160 of the script",
             );
         }
@@ -127,7 +127,7 @@ impl StandardScripts {
 
         let should_be_opequalverify = Opcode::from_byte(opcode_buf[0]);
         if should_be_opequalverify.ne(&Opcode::OP_EQUALVERIFY) {
-            return Self::to_io_error(
+            return to_io_error(
                 "Invalid data, expected OP_EQUALVERIFY as fourth opcode after OP_PUSHBYTES_20 of the script",
             );
         }
@@ -136,7 +136,7 @@ impl StandardScripts {
         bytes.read_exact(&mut opcode_buf)?;
         let should_be_opchecksing = Opcode::from_byte(opcode_buf[0]);
         if should_be_opchecksing.ne(&Opcode::OP_CHECKSIG) {
-            return Self::to_io_error(
+            return to_io_error(
                 "Invalid Data. Expected OP_CHECKSIG after reading OP_EQUALVERIFY byte in the script.",
             );
         }
@@ -145,6 +145,7 @@ impl StandardScripts {
         script_builder
             .push_opcode(Opcode::OP_DUP)?
             .push_opcode(Opcode::OP_HASH160)?
+            .push_opcode(Opcode::PushBytes(20))?
             .push_bytes(&hash160_bytes)?
             .push_opcode(Opcode::OP_EQUALVERIFY)?
             .push_opcode(Opcode::OP_CHECKSIG)?;
@@ -153,18 +154,87 @@ impl StandardScripts {
     }
 
     /// Parse as P2SH
+    /// A p2sh scriptPubKey looks like:
+    /// ASM: OP_HASH160 OP_PUSHBYTES_20 <pubkey hash hex> OP_EQUAL
+    /// e.g. OP_HASH160 OP_PUSHBYTES_20 748284390f9e263a4b766a75d0633c50426eb875 OP_EQUAL
+    /// Hex: a914748284390f9e263a4b766a75d0633c50426eb87587 in transaction:
+    /// 450c309b70fb3f71b63b10ce60af17499bd21b1db39aa47b19bf22166ee67144 (Output 1)
     pub fn parse_p2sh(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
-        todo!()
+        let mut opcode_buf = [0u8; 1];
+        bytes.read_exact(&mut opcode_buf)?;
+
+        let second_opcode = Opcode::from_byte(opcode_buf[0]);
+
+        // Second opcode should be OP_PUSHBYTES_20
+        if second_opcode.ne(&Opcode::PushBytes(20)) {
+            return to_io_error(
+                "Invalid data. Expected OP_PUSHBYTES_20 as second opcode after OP_HASH160 of the script",
+            );
+        }
+
+        // Read the 20 bytes of the hash160
+        // use read_bytes
+        let bytes_20_buf = second_opcode.read_bytes(bytes)?;
+        // let mut bytes_20_buf = [0u8; 20];
+        // bytes.read_exact(&mut bytes_20_buf)?;
+
+        bytes.read_exact(&mut opcode_buf)?;
+        let should_be_opequal = Opcode::from_byte(opcode_buf[0]);
+        if should_be_opequal.ne(&Opcode::OP_EQUAL) {
+            return to_io_error("Invalid data. Expected OP_EQUAL as the last opcode in the script");
+        }
+
+        let mut script_builder = ScriptBuilder::new();
+        script_builder
+            .push_opcode(Opcode::OP_HASH160)?
+            .push_opcode(Opcode::PushBytes(20))?
+            .push_bytes(&bytes_20_buf)?
+            .push_opcode(Opcode::OP_EQUAL)?;
+
+        Ok(script_builder.build())
     }
 
     /// Parse as parse_data
+    /// An only data output does not have any scriptPubKey, it can't spend and store a little data, it likes:
+    /// ASM: OP_RETURN PUSHBYTES_* <data hash hex>
+    /// e.g. OP_RETURN PUSHBYTES_11 68656c6c6f20776f726c64
+    /// Hex: 6a0b68656c6c6f20776f726c64 in  transaction:
+    /// 6dfb16dd580698242bcfd8e433d557ed8c642272a368894de27292a8844a4e75 (Output 2)
     pub fn parse_data(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
-        todo!()
+        let mut opcode_buf = [0u8; 1];
+        bytes.read_exact(&mut opcode_buf)?;
+
+        let second_opcode = Opcode::from_byte(opcode_buf[0]);
+
+        // Read the number of bytes specified by the opcode
+        let data_bytes = second_opcode.read_bytes(bytes)?;
+
+        let mut script_builder = ScriptBuilder::new();
+        script_builder
+            .push_opcode(Opcode::OP_RETURN)?
+            .push_opcode(second_opcode)?
+            .push_bytes(&data_bytes)?;
+
+        Ok(script_builder.build())
     }
 
     /// Parse as P2WPKH
+    /// A P2WPKH scriptPubKey looks like:
+    /// ASM: OP_0 OP_PUSHBYTES_20 <pubkey hash hex>
+    /// e.g. OP_0 OP_PUSHBYTES_20 853ec3166860371ee67b7754ff85e13d7a0d6698
+    /// Hex: 0014853ec3166860371ee67b7754ff85e13d7a0d6698
     pub fn parse_p2wpkh(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
-        todo!()
+        // Read the next 20 bytes (pubkey hash)
+        let mut pubkey_hash_bytes = [0u8; 20];
+        bytes.read_exact(&mut pubkey_hash_bytes)?;
+
+        let mut script_builder = ScriptBuilder::new();
+        script_builder
+            .push_opcode(Opcode::OP_0)?
+            .push_opcode(Opcode::PushBytes(20))?
+            .push_bytes(&pubkey_hash_bytes)?;
+
+        Ok(script_builder.build())
     }
 
     /// Parse as P2WSH
@@ -180,12 +250,6 @@ impl StandardScripts {
     /// Parse as P2MS
     pub fn parse_p2ms(bytes: &mut Cursor<&[u8]>) -> io::Result<String> {
         todo!()
-    }
-
-    /// Error handling returning an `io::Result<String>` to avoid having to add `Err()`
-    /// whenever calling this method.
-    pub fn to_io_error(message: &str) -> io::Result<String> {
-        Err(io::Error::new(ErrorKind::InvalidData, message))
     }
 }
 
@@ -340,5 +404,83 @@ impl ScriptBuilder {
             .collect::<String>()
             .trim()
             .into()
+    }
+}
+
+/// Error handling returning an `io::Result<String>` to avoid having to add `Err()`
+/// whenever calling this method.
+pub fn to_io_error(message: &str) -> io::Result<String> {
+    Err(io::Error::new(ErrorKind::InvalidData, message))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hex_literal::*;
+
+    #[test]
+    fn parse_p2pk_should_work() {
+        let p2pk_bytes = hex!("410000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ac");
+        let mut p2pk_cursor = Cursor::new(p2pk_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2pk_cursor);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2pkh_should_work() {
+        let p2pkh_byts = hex!("76a914000000000000000000000000000000000000000088ac");
+        let mut p2pkh_cursor = Cursor::new(p2pkh_byts.as_ref());
+        let outcome = StandardScripts::parse(&mut p2pkh_cursor);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2sh_should_work() {
+        let p2sh_bytes = hex!("a914f54a6690e0fb67c222aafde6482a66eeb74ebf5c87");
+        let mut p2sh = Cursor::new(p2sh_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2sh);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2sh_should_work_2() {
+        let p2sh_bytes = hex!("a914748284390f9e263a4b766a75d0633c50426eb87587");
+        let mut p2sh = Cursor::new(p2sh_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2sh);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_data_should_work() {
+        let on_return_bytes = hex!("6a0b68656c6c6f20776f726c64");
+        let mut on_return_cursor = Cursor::new(on_return_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut on_return_cursor);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
+    }
+
+    #[test]
+    fn parse_p2wpkh_should_work() {
+        let p2wpkh_bytes = hex!("0014751e76e8199196d454941c45d1b3a323f1433bd6");
+        let mut p2wpkh = Cursor::new(p2wpkh_bytes.as_ref());
+        let outcome = StandardScripts::parse(&mut p2wpkh);
+
+        assert!(outcome.is_ok());
+
+        dbg!(&outcome.unwrap());
     }
 }
