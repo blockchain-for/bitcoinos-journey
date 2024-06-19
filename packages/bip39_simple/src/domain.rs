@@ -4,10 +4,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use pbkdf2::pbkdf2_hmac;
 use rand_chacha::ChaCha20Rng;
 use rand_core::{RngCore, SeedableRng};
 
 use sha2::{Digest, Sha256, Sha512};
+
+use crate::{ITERATION_COUNT, SALT_PREFIX};
 
 /// This struct takes a constant `N` as a generic
 /// Enabling one to specify a variable length for the bytes generated
@@ -90,5 +93,95 @@ impl Bip39Generator {
         self.appended = appended;
 
         self
+    }
+
+    pub fn compute(&mut self) -> &mut Self {
+        let mut bits = vec![];
+
+        for &byte in self.appended.iter() {
+            for i in (0..8).rev() {
+                bits.push((byte >> i) & 1u8 == 1);
+            }
+        }
+
+        for chunk in bits.chunks(11) {
+            if chunk.len() == 11 {
+                let mut value: u16 = 0;
+
+                for (i, &bit) in chunk.iter().enumerate() {
+                    if bit {
+                        value |= 1u16 << (10 - i);
+                    }
+                }
+                self.mnemonic_index.push(value);
+            }
+        }
+
+        self
+    }
+
+    pub fn mnemonic<const N: usize>(&mut self) -> io::Result<String> {
+        let entropy = Entropy::<N>::generate();
+
+        self.generate_checksum(entropy.0);
+
+        self.compute();
+
+        let wordlist = self.load_wordlist()?;
+
+        let mnemonic = self
+            .mnemonic_index
+            .iter()
+            .enumerate()
+            .map(|(index, line_number)| {
+                let word = wordlist[*line_number as usize].clone() + " ";
+
+                let index = index + 1;
+
+                // Check if we have our index is less than 10 so we add a padding to making printing
+                let indexed = if index < 10 {
+                    String::new() + " " + index.to_string().as_str()
+                } else {
+                    index.to_string()
+                };
+
+                // Print our index and each word.
+                // This will show the user the words in each line but with a number. e.g.
+                //  9. foo
+                // 10. bar
+                println!("{}. {}", indexed, &word);
+
+                word
+            })
+            .collect::<String>();
+
+        Ok(mnemonic.trim().to_owned())
+    }
+
+    fn seed(mnemonic: &str, passphrase: Option<&str>) -> io::Result<Vec<u8>> {
+        let salt = if let Some(passphrase_required) = passphrase {
+            String::new() + SALT_PREFIX + passphrase_required
+        } else {
+            String::from(SALT_PREFIX)
+        };
+
+        let mut wallet_seed = [0u8; 64]; // 512 bits = 64 bytes
+
+        pbkdf2_hmac::<Sha512>(
+            mnemonic.as_bytes(),
+            salt.as_bytes(),
+            ITERATION_COUNT,
+            &mut wallet_seed,
+        );
+
+        Ok(wallet_seed.to_vec())
+    }
+
+    pub fn insecure_seed(mnemonic: &str) -> io::Result<Vec<u8>> {
+        Self::seed(mnemonic, None)
+    }
+
+    pub fn secure_seed(mnemonic: &str, passphrase: &str) -> io::Result<Vec<u8>> {
+        Self::seed(mnemonic, Some(passphrase))
     }
 }
