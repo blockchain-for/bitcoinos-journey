@@ -1,6 +1,7 @@
 pub mod legacy_multisig;
 pub mod p2wpkh;
 pub mod p2wsh_multisig_22;
+pub mod pltc;
 pub mod psbt0;
 
 pub mod scripts;
